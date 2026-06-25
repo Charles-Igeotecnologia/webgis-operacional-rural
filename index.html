@@ -55,11 +55,13 @@ html, body {
 .icon.lg { width: 20px; height: 20px; }
 .icon-svg { display: none; }
 
-/* ===== LAYOUT GERAL ===== */
+/* ===== LAYOUT GERAL (flexbox — altura previsível em qualquer tela) ===== */
 #app {
-  display: grid;
-  grid-template-rows: auto 1fr auto;
-  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;          /* fallback */
+  height: 100dvh;         /* viewport dinâmico — corrige a barra de URL no mobile */
+  overflow: hidden;
 }
 
 /* ===== CABEÇALHO ===== */
@@ -142,6 +144,20 @@ html, body {
   grid-template-columns: auto 1fr;
   position: relative;
   overflow: hidden;
+  min-height: 0;          /* permite que o grid filho encolha dentro do #app */
+  height: 100%;           /* garante altura total vinda do #app (1fr) */
+}
+.map-wrap {
+  position: relative;
+  min-width: 0;           /* evita overflow horizontal em telas estreitas */
+  height: 100%;           /* garante altura total para ancorar controles inferiores */
+  width: 100%;
+}
+#map {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  background: #0a0a0a;
+  z-index: 1;
 }
 
 /* ===== SIDEBAR ===== */
@@ -153,7 +169,7 @@ html, body {
   border-right: 1px solid var(--border-soft);
   display: flex; flex-direction: column;
   overflow-y: auto;
-  transition: width .28s ease, padding .28s ease;
+  transition: transform .28s ease, width .28s ease, padding .28s ease;
   z-index: 1000;
 }
 .sidebar.collapsed { width: 0; border-right: none; overflow: hidden; }
@@ -304,12 +320,6 @@ html, body {
 .collected-item .ci-del:hover { opacity: 1; }
 
 /* ===== MAPA ===== */
-.map-wrap { position: relative; }
-#map {
-  position: absolute; inset: 0;
-  background: #0a0a0a;
-  z-index: 1;
-}
 /* Linhas de gradiente sobre o mapa */
 .map-wrap::before {
   content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 500;
@@ -326,7 +336,11 @@ html, body {
   border-radius: 10px !important;
   overflow: hidden;
   box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  z-index: 1200 !important;
 }
+/* Garante que o container de controles do Leaflet fique acima dos panes */
+.leaflet-control-container { z-index: 1200; }
+.leaflet-bottom, .leaflet-top { z-index: 1200 !important; }
 .leaflet-control-zoom a {
   background: var(--bg-panel) !important;
   color: var(--text-soft) !important;
@@ -448,8 +462,8 @@ html, body {
 /* Seletor de base flutuante */
 .base-switcher {
   position: absolute;
-  bottom: 30px; left: 12px;
-  z-index: 600;
+  bottom: 38px; left: 12px;
+  z-index: 1200;
   background: var(--bg-panel);
   backdrop-filter: blur(12px);
   border: 1px solid var(--border-soft);
@@ -470,10 +484,10 @@ html, body {
 .base-btn.active { background: var(--amber); color: #1a0a00; }
 .base-btn:not(.active):hover { color: var(--text-soft); background: rgba(255,255,255,0.06); }
 
-/* Barra de medição */
+/* Barra de medição - posicionada abaixo da busca */
 .measure-bar {
   position: absolute;
-  top: 12px; left: 12px;
+  top: 64px; left: 12px;
   z-index: 600;
   background: var(--bg-panel);
   backdrop-filter: blur(12px);
@@ -679,11 +693,131 @@ html, body {
 
 .hidden-file { display: none; }
 
-/* Responsivo */
-@media (max-width: 720px) {
-  .indicators { display: none; }
-  .sidebar { position: absolute; top: 0; bottom: 0; left: 0; width: 86%; max-width: 320px; }
+/* Backdrop da sidebar (telas pequenas) */
+.sidebar-backdrop {
+  display: none;
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 999;
+  opacity: 0; transition: opacity .25s;
+}
+.sidebar-backdrop.show { display: block; }
+.sidebar-backdrop.visible { opacity: 1; }
+
+/* ============================================================
+   RESPONSIVO — Desktop / Tablet / Smartphone
+   ============================================================ */
+
+/* --- TABLET (retrato e telas médias, até 1024px) --- */
+@media (max-width: 1024px) {
+  /* Sidebar vira gaveta (overlay), recolhida por padrão */
+  .sidebar {
+    position: absolute;
+    top: 0; bottom: 0; left: 0;
+    width: 320px; max-width: 86%;
+    transform: translateX(-100%);
+    box-shadow: 8px 0 30px rgba(0,0,0,0.6);
+  }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar.collapsed { transform: translateX(-100%); width: 320px; max-width: 86%; }
+  /* Mapa ocupa a largura total */
+  .body { grid-template-columns: 1fr; }
+  /* Indicadores: mostra só os essenciais */
+  .indicator:nth-child(n+4) { display: none; }
+}
+
+/* --- SMARTPHONE (até 640px) --- */
+@media (max-width: 640px) {
+  /* Cabeçalho compacto com quebra de linha para estatísticas */
+  .header { padding: 8px 12px; gap: 8px; flex-wrap: wrap; }
+  .brand { padding-right: 0; gap: 7px; border-right: none; }
+  .brand-logo { height: 34px; }
+  .brand-title { font-size: 11px; letter-spacing: .5px; }
+  .brand-sub { font-size: 9px; }
+  .header-actions { margin-left: auto; }
+  /* Reorganiza indicadores em uma segunda linha rolável no mobile */
+  .indicators {
+    display: flex;
+    width: 100%;
+    order: 3;
+    padding: 6px 0 2px 0;
+    gap: 6px;
+    border-top: 1px solid var(--border-soft);
+    margin-top: 4px;
+  }
+  .indicator {
+    padding: 4px 8px;
+    min-width: 65px;
+    border-radius: 6px;
+  }
+  .indicator-num { font-size: 14px; }
+  .indicator-label { font-size: 8px; margin-top: 1px; }
+  /* Botões do header um pouco menores, bons alvos de toque */
+  .icon-btn { width: 40px; height: 40px; }
+  /* Sidebar mais larga (quase tela cheia) */
+  .sidebar { width: 88%; max-width: 340px; }
+  .sidebar-inner { min-width: 0; padding: 12px; }
+  /* Ferramentas de mapa: alvos de toque maiores */
+  .map-tool { width: 44px; height: 44px; }
+  .map-control-bar { top: 10px; right: 10px; gap: 7px; }
+  /* Seletor de base compacto (só ícones) — elevado acima da atribuição */
+  .base-switcher { bottom: 34px; left: 10px; padding: 4px; }
+  .base-btn { padding: 8px 10px; }
+  .base-btn .base-label { display: none; }
+  /* Barra de medição ocupa largura, quebra em coluna */
+  .measure-bar {
+    top: 64px; left: 10px; right: 64px;
+    flex-wrap: wrap; gap: 6px 10px;
+    padding: 7px 10px; font-size: 11px;
+  }
+  /* Zoom control do Leaflet */
+  .leaflet-control-zoom { margin-bottom: 14px !important; }
+  .leaflet-control-zoom a { width: 38px !important; height: 38px !important; line-height: 38px !important; }
+  /* Rodapé compacto */
+  .footer { padding: 7px 10px; gap: 8px; font-size: 10px; }
   .footer-text { display: none; }
+  /* Modal tabela ocupa tela toda sem margem */
+  .modal-overlay { padding: 0; }
+  .modal { max-width: 100%; max-height: 100%; border-radius: 0; }
+  .modal-search { width: 130px; }
+  
+  /* Layout em Cartões Responsivos para a Tabela no Celular */
+  .attr-table, .attr-table thead, .attr-table tbody, .attr-table tr, .attr-table th, .attr-table td {
+    display: block;
+  }
+  .attr-table thead { display: none; }
+  .attr-table tr {
+    border: 1px solid var(--border-soft);
+    border-radius: 10px;
+    margin: 10px;
+    padding: 10px 14px;
+    background: var(--bg-panel-soft);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+  }
+  .attr-table td {
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    padding: 8px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    min-height: 38px;
+  }
+  .attr-table td:last-child { border-bottom: none; }
+  .attr-table td::before {
+    content: attr(data-label);
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: .5px;
+  }
+  .attr-table input.cell {
+    text-align: right;
+    width: 60%;
+    max-width: 200px;
+    padding: 4px 8px;
+  }
+  .attr-actions { justify-content: flex-end; gap: 8px; }
 }
 </style>
 </head>
@@ -717,6 +851,7 @@ html, body {
   <symbol id="i-table" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 9h18M3 14h18M9 4v16M15 4v16"/></symbol>
   <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M14 6l4 4"/></symbol>
   <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
 </svg>
 
 <div id="app">
@@ -747,6 +882,9 @@ html, body {
 
   <!-- ===== CORPO ===== -->
   <div class="body">
+
+    <!-- Backdrop p/ fechar a sidebar em telas touch -->
+    <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
 
     <!-- ===== SIDEBAR ===== -->
     <aside class="sidebar" id="sidebar">
@@ -790,26 +928,29 @@ html, body {
           </div></div>
         </div>
 
-        <!-- Módulo: Importar KML -->
+        <!-- Módulo: Importar KML / Backup -->
         <div class="module" id="mod-kml">
-          <div class="module-head"><div class="module-icon"><svg class="icon sm"><use href="#i-download"/></svg></div><div class="module-title">Importar KML</div><div class="module-toggle"><svg class="icon sm"><use href="#i-chev"/></svg></div></div>
+          <div class="module-head"><div class="module-icon"><svg class="icon sm"><use href="#i-download"/></svg></div><div class="module-title">Importar / Restaurar</div><div class="module-toggle"><svg class="icon sm"><use href="#i-chev"/></svg></div></div>
           <div class="module-body"><div class="module-content">
-            <div class="hint">Carregue um arquivo <b>.kml</b> ou <b>.kmz</b> com rotas, áreas ou pontos de interesse.</div>
-            <div class="btn-row" style="margin-top:10px;">
-              <button class="btn" onclick="document.getElementById('kml-file').click()"><svg class="icon sm" style="color:inherit"><use href="#i-download"/></svg> Selecionar arquivo</button>
+            <div class="hint">Carregue um arquivo <b>.kml</b> de feições ou restaure um backup completo em JSON (<b>.json</b>).</div>
+            <div class="btn-row" style="margin-top:10px; flex-direction:column; gap:6px;">
+              <button class="btn" onclick="document.getElementById('kml-file').click()"><svg class="icon sm" style="color:inherit"><use href="#i-download"/></svg> Importar KML</button>
+              <button class="btn secondary" onclick="document.getElementById('backup-file').click()"><svg class="icon sm" style="color:inherit"><use href="#i-table"/></svg> Restaurar Backup (JSON)</button>
             </div>
-            <input type="file" id="kml-file" class="hidden-file" accept=".kml,.kml">
+            <input type="file" id="kml-file" class="hidden-file" accept=".kml">
+            <input type="file" id="backup-file" class="hidden-file" accept=".json">
             <div id="kml-list" style="margin-top:8px;"></div>
           </div></div>
         </div>
 
-        <!-- Módulo: Exportar KML -->
+        <!-- Módulo: Exportar KML / Backup -->
         <div class="module" id="mod-export">
-          <div class="module-head"><div class="module-icon"><svg class="icon sm"><use href="#i-upload"/></svg></div><div class="module-title">Exportar KML</div><div class="module-toggle"><svg class="icon sm"><use href="#i-chev"/></svg></div></div>
+          <div class="module-head"><div class="module-icon"><svg class="icon sm"><use href="#i-upload"/></svg></div><div class="module-title">Exportar / Backup</div><div class="module-toggle"><svg class="icon sm"><use href="#i-chev"/></svg></div></div>
           <div class="module-body"><div class="module-content">
-            <div class="hint">Exporta todos os pontos coletados e as 3 escolas prioritárias em um arquivo KML para uso em Google Earth / QGIS.</div>
-            <div class="btn-row" style="margin-top:10px;">
-              <button class="btn" id="btn-export-kml"><svg class="icon sm" style="color:inherit"><use href="#i-upload"/></svg> Baixar KML</button>
+            <div class="hint">Baixe as feições e escolas prioritárias em KML ou faça o download do backup completo em JSON de todo o sistema.</div>
+            <div class="btn-row" style="margin-top:10px; flex-direction:column; gap:6px;">
+              <button class="btn" id="btn-export-kml"><svg class="icon sm" style="color:inherit"><use href="#i-upload"/></svg> Exportar KML</button>
+              <button class="btn secondary" id="btn-export-json"><svg class="icon sm" style="color:inherit"><use href="#i-download"/></svg> Salvar Backup (JSON)</button>
             </div>
           </div></div>
         </div>
@@ -834,6 +975,16 @@ html, body {
     <div class="map-wrap">
       <div id="map"></div>
 
+      <!-- Barra de Busca Flutuante -->
+      <div class="map-search-container" id="map-search-container">
+        <div class="map-search-box">
+          <svg class="icon"><use href="#i-search"/></svg>
+          <input type="text" id="map-search-input" placeholder="Buscar escola no mapa..." autocomplete="off">
+          <button class="search-clear-btn" id="map-search-clear" style="display:none"><svg class="icon sm"><use href="#i-x"/></svg></button>
+        </div>
+        <div class="map-search-results" id="map-search-results" style="display:none"></div>
+      </div>
+
       <!-- Barra de medição -->
       <div class="measure-bar" id="measure-bar">
         <span id="measure-title" style="font-weight:700;color:var(--amber-light);letter-spacing:.5px">MEDIÇÃO</span>
@@ -851,8 +1002,8 @@ html, body {
 
       <!-- Seletor de base -->
       <div class="base-switcher">
-        <button class="base-btn active" data-base="satellite"><svg class="icon sm" style="color:inherit;display:inline-block;vertical-align:-2px;margin-right:4px"><use href="#i-satellite"/></svg>Satélite</button>
-        <button class="base-btn" data-base="dark"><svg class="icon sm" style="color:inherit;display:inline-block;vertical-align:-2px;margin-right:4px"><use href="#i-moon"/></svg>Escuro</button>
+        <button class="base-btn active" data-base="satellite"><svg class="icon sm" style="color:inherit;display:inline-block;vertical-align:-2px;margin-right:4px"><use href="#i-satellite"/></svg><span class="base-label">Satélite</span></button>
+        <button class="base-btn" data-base="dark"><svg class="icon sm" style="color:inherit;display:inline-block;vertical-align:-2px;margin-right:4px"><use href="#i-moon"/></svg><span class="base-label">Escuro</span></button>
       </div>
     </div>
   </div>
@@ -1081,16 +1232,21 @@ const userSonarIcon = L.divIcon({
 /* ============================================================
    CAMADAS
    ============================================================ */
-const escolasLayer = L.layerGroup().addTo(map);
+const escolasRibeirinhasLayer = L.layerGroup().addTo(map);
+const escolasRodoviariasLayer = L.layerGroup().addTo(map);
 const escolasPrioritariasLayer = L.layerGroup().addTo(map);
 const collectedLayer = L.layerGroup().addTo(map);
 const kmlOverlay = L.layerGroup().addTo(map);
 
+const numRibeirinhas = ESCOLAS.filter(e => e.local === 'Ribeirinha').length;
+const numRodoviarias = ESCOLAS.filter(e => e.local === 'Rodoviária').length;
+
 // definição das camadas p/ o painel
 const LAYERS = [
   { id: 'prioritarias', name: 'Escolas Prioritárias', color: '#ff8426', layer: escolasPrioritariasLayer, on: true },
-  { id: 'escolas', name: 'Escolas Rurais (85)', color: '#c2410c', layer: escolasLayer, on: true },
-  { id: 'collected', name: 'Pontos Coletados', color: '#35d07f', layer: collectedLayer, on: true },
+  { id: 'ribeirinhas', name: `Escolas Ribeirinhas (${numRibeirinhas})`, color: '#38bdf8', layer: escolasRibeirinhasLayer, on: true },
+  { id: 'rodoviarias', name: `Escolas Rodoviárias (${numRodoviarias})`, color: '#35d07f', layer: escolasRodoviariasLayer, on: true },
+  { id: 'collected', name: 'Pontos Coletados', color: '#a8a29e', layer: collectedLayer, on: true },
   { id: 'labels', name: 'Rótulos / Nomes', color: '#f5f5f5', layer: labelsOverlay, on: false },
 ];
 
@@ -1225,8 +1381,12 @@ ESCOLAS.forEach(escola => {
   const icon = isPriority(escola.id) ? schoolPriorityIcon : schoolNormalIcon;
   const marker = L.marker([escola.lat, escola.lng], { icon }).bindPopup(criarPopupEscola(escola));
   STATE.schoolMarkers[escola.id] = marker;
-  if (isPriority(escola.id)) marker.addTo(escolasPrioritariasLayer);
-  else marker.addTo(escolasLayer);
+  if (isPriority(escola.id)) {
+    marker.addTo(escolasPrioritariasLayer);
+  } else {
+    if (escola.local === 'Ribeirinha') marker.addTo(escolasRibeirinhasLayer);
+    else marker.addTo(escolasRodoviariasLayer);
+  }
 });
 
 // Re-renderiza o marcador de uma escola ao alternar prioridade
@@ -1235,14 +1395,19 @@ function refreshSchoolMarker(id) {
   if (!escola) return;
   const old = STATE.schoolMarkers[id];
   // remove das camadas onde estiver
-  if (escolasLayer.hasLayer(old)) escolasLayer.removeLayer(old);
+  if (escolasRibeirinhasLayer.hasLayer(old)) escolasRibeirinhasLayer.removeLayer(old);
+  if (escolasRodoviariasLayer.hasLayer(old)) escolasRodoviariasLayer.removeLayer(old);
   if (escolasPrioritariasLayer.hasLayer(old)) escolasPrioritariasLayer.removeLayer(old);
   // recria com ícone e camada corretos
   const icon = isPriority(id) ? schoolPriorityIcon : schoolNormalIcon;
   const marker = L.marker([escola.lat, escola.lng], { icon }).bindPopup(criarPopupEscola(escola));
   STATE.schoolMarkers[id] = marker;
-  if (isPriority(id)) marker.addTo(escolasPrioritariasLayer);
-  else marker.addTo(escolasLayer);
+  if (isPriority(id)) {
+    marker.addTo(escolasPrioritariasLayer);
+  } else {
+    if (escola.local === 'Ribeirinha') marker.addTo(escolasRibeirinhasLayer);
+    else marker.addTo(escolasRodoviariasLayer);
+  }
 }
 
 /* ============================================================
@@ -1791,6 +1956,70 @@ function escapeXml(s) {
 }
 
 /* ============================================================
+   BACKUP JSON (SALVAR E RESTAURAR)
+   ============================================================ */
+// Exportar JSON
+document.getElementById('btn-export-json').onclick = () => {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return toast('Sem dados para exportar no backup', 'error');
+    const blob = new Blob([raw], { type: 'application/json' });
+    const a = document.createElement('a');
+    const date = new Date().toISOString().slice(0, 10);
+    a.href = URL.createObjectURL(blob);
+    a.download = `backup_webgis_puraquequara_${date}.json`;
+    a.click();
+    toast('Backup JSON baixado!', 'success');
+  } catch (e) {
+    toast('Erro ao exportar backup: ' + e.message, 'error');
+  }
+};
+
+// Importar/Restaurar JSON
+document.getElementById('backup-file').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (!data || (!data.features && !data.schoolObs && !data.prioritySchools)) {
+        throw new Error('Arquivo JSON inválido ou incompatível.');
+      }
+      
+      // Carrega no estado global
+      STATE.features = data.features || [];
+      STATE.schoolObs = data.schoolObs || {};
+      STATE.prioritySchools = data.prioritySchools || {};
+      
+      // Salva no localStorage
+      saveState();
+      
+      // Atualiza interface do mapa: limpa feições desenhadas e recria
+      collectedLayer.clearLayers();
+      STATE.features.forEach(renderFeature);
+      
+      // Recria marcadores das escolas para refletir prioridades restauradas
+      ESCOLAS.forEach(escola => {
+        refreshSchoolMarker(escola.id);
+      });
+      
+      // Recarrega painéis da barra lateral
+      renderPriorityList();
+      renderPriorityPicker();
+      renderCollectedList();
+      updateIndicators();
+      
+      toast('Backup restaurado com sucesso!', 'success');
+      setStatus('Backup restaurado');
+    } catch (err) {
+      toast('Erro na restauração: ' + err.message, 'error');
+    }
+  };
+  reader.readAsText(file);
+});
+
+/* ============================================================
    GEOLOCALIZAÇÃO / RASTREAMENTO
    ============================================================ */
 document.getElementById('btn-track-start').onclick = startTracking;
@@ -1843,11 +2072,48 @@ function placeUserMarker(lat, lng, accuracy) {
 /* ============================================================
    CONTROLES DE UI
    ============================================================ */
-// Sidebar toggle
-document.getElementById('btn-toggle-sidebar').onclick = () => {
-  document.getElementById('sidebar').classList.toggle('collapsed');
-  setTimeout(() => map.invalidateSize(), 300);
-};
+// Sidebar toggle — responsivo (desktop: collapsed | tablet/smartphone: open + backdrop)
+const sidebar = document.getElementById('sidebar');
+const sidebarBackdrop = document.getElementById('sidebar-backdrop');
+function isMobileLayout() { return window.matchMedia('(max-width: 1024px)').matches; }
+function openSidebar() {
+  if (isMobileLayout()) {
+    sidebar.classList.add('open');
+    sidebarBackdrop.classList.add('show');
+    requestAnimationFrame(() => sidebarBackdrop.classList.add('visible'));
+  } else {
+    sidebar.classList.remove('collapsed');
+    setTimeout(() => map.invalidateSize(), 300);
+  }
+}
+function closeSidebar() {
+  if (isMobileLayout()) {
+    sidebar.classList.remove('open');
+    sidebarBackdrop.classList.remove('visible');
+    setTimeout(() => sidebarBackdrop.classList.remove('show'), 250);
+  } else {
+    sidebar.classList.add('collapsed');
+    setTimeout(() => map.invalidateSize(), 300);
+  }
+}
+function toggleSidebar() {
+  const mobile = isMobileLayout();
+  const isOpen = mobile ? sidebar.classList.contains('open') : !sidebar.classList.contains('collapsed');
+  isOpen ? closeSidebar() : openSidebar();
+}
+document.getElementById('btn-toggle-sidebar').onclick = toggleSidebar;
+sidebarBackdrop.onclick = closeSidebar;   // toque fora fecha (mobile)
+// Em telas pequenas, fechar a sidebar ao escolher uma escola no painel
+window.addEventListener('resize', () => {
+  // ao cruzar de mobile->desktop, garante estado limpo
+  if (!isMobileLayout()) {
+    sidebarBackdrop.classList.remove('show', 'visible');
+    sidebar.classList.remove('open');
+  } else {
+    sidebar.classList.remove('collapsed');
+  }
+  map.invalidateSize();
+});
 // Fit à extensão das escolas prioritárias
 document.getElementById('btn-fit').onclick = () => {
   const pri = ESCOLAS.filter(e => isPriority(e.id)).map(e => [e.lat, e.lng]);
@@ -1899,6 +2165,29 @@ function toast(msg, type) {
     if (priLL.length) map.fitBounds(L.latLngBounds(priLL).pad(0.6));
   }, 200);
   setTimeout(() => toast('WebGIS pronto — ' + STATE.features.length + ' feições · ' + ESCOLAS.filter(e=>isPriority(e.id)).length + ' prioritárias', 'success'), 600);
+  // 4. Em telas pequenas, a sidebar inicia recolhida (mapa livre)
+  if (isMobileLayout()) {
+    sidebar.classList.remove('open');
+    sidebarBackdrop.classList.remove('show', 'visible');
+  }
+  // 5. Monitoramento de conexão Online/Offline
+  function updateOnlineStatus() {
+    const dot = document.querySelector('.status-dot');
+    const text = document.getElementById('status-text');
+    if (navigator.onLine) {
+      dot.style.background = 'var(--green)';
+      dot.style.boxShadow = '0 0 8px var(--green)';
+      text.textContent = 'Sistema Online - pronto';
+    } else {
+      dot.style.background = 'var(--amber)';
+      dot.style.boxShadow = '0 0 8px var(--amber)';
+      text.textContent = 'Modo Offline - GPS e Coleta ativos';
+      toast('Você está offline. Fotos de satélite podem não carregar, mas a coleta local e o GPS funcionam normalmente.', 'error');
+    }
+  }
+  window.addEventListener('online', () => { updateOnlineStatus(); toast('Conexão restabelecida. Mapas de fundo ativos.', 'success'); });
+  window.addEventListener('offline', updateOnlineStatus);
+  updateOnlineStatus();
 })();
 
 /* ============================================================
@@ -1994,11 +2283,11 @@ function refreshAttrTable() {
       if (q && !(e.nome + ' ' + e.bairro + ' ' + obs).toLowerCase().includes(q)) return;
       rows.push(`
         <tr data-kind="school" data-id="${e.id}">
-          <td><span class="attr-type t-school">Escola</span></td>
-          <td><input class="cell" data-school-name="${e.id}" value="${attrEscape(e.nome)}"></td>
-          <td><input class="cell" data-school-loc="${e.id}" value="${attrEscape(e.bairro + ' · ' + e.local)}"></td>
-          <td style="font-family:monospace;font-size:11px">${e.lat.toFixed(5)}, ${e.lng.toFixed(5)}</td>
-          <td class="attr-actions">
+          <td data-label="Tipo"><span class="attr-type t-school">Escola</span></td>
+          <td data-label="Nome"><input class="cell" data-school-name="${e.id}" value="${attrEscape(e.nome)}"></td>
+          <td data-label="Bairro / Local"><input class="cell" data-school-loc="${e.id}" value="${attrEscape(e.bairro + ' · ' + e.local)}"></td>
+          <td data-label="Coordenadas" style="font-family:monospace;font-size:11px">${e.lat.toFixed(5)}, ${e.lng.toFixed(5)}</td>
+          <td data-label="Ações" class="attr-actions">
             <span class="attr-act" data-zoom-school="${e.id}" title="Zoom">${iconSvg('i-target')}</span>
             <a class="attr-act" href="${gmapsUrl(e.lat, e.lng)}" target="_blank" rel="noopener" title="Google Maps">${iconSvg('i-external')}</a>
           </td>
@@ -2020,11 +2309,11 @@ function refreshAttrTable() {
     const center = featCenter(f);
     rows.push(`
       <tr data-kind="feat" data-id="${f.id}">
-        <td><span class="attr-type ${tClass}">${tLabel}</span></td>
-        <td><input class="cell" data-feat-desc="${f.id}" value="${attrEscape(f.desc || '')}" placeholder="(sem descrição)"></td>
-        <td style="color:var(--text-muted)">${f.type === 'point' ? 'Ponto' : (f.latlngs.length + ' vértices')}</td>
-        <td style="font-family:monospace;font-size:11px">${medida}</td>
-        <td class="attr-actions">
+        <td data-label="Tipo"><span class="attr-type ${tClass}">${tLabel}</span></td>
+        <td data-label="Nome / Descrição"><input class="cell" data-feat-desc="${f.id}" value="${attrEscape(f.desc || '')}" placeholder="(sem descrição)"></td>
+        <td data-label="Vértices / Tipo" style="color:var(--text-muted)">${f.type === 'point' ? 'Ponto' : (f.latlngs.length + ' vértices')}</td>
+        <td data-label="Medida" style="font-family:monospace;font-size:11px">${medida}</td>
+        <td data-label="Ações" class="attr-actions">
           <span class="attr-act" data-zoom-feat="${f.id}" title="Zoom">${iconSvg('i-target')}</span>
           <a class="attr-act" href="${gmapsUrl(center[0], center[1])}" target="_blank" rel="noopener" title="Google Maps">${iconSvg('i-external')}</a>
           <span class="attr-act del" data-del-feat="${f.id}" title="Excluir">${iconSvg('i-x')}</span>
@@ -2065,6 +2354,77 @@ document.getElementById('attr-tbody').addEventListener('change', e => {
 function attrEscape(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
+
+/* ============================================================
+   PESQUISA DE ESCOLAS NO MAPA
+   ============================================================ */
+const mapSearchInput = document.getElementById('map-search-input');
+const mapSearchClear = document.getElementById('map-search-clear');
+const mapSearchResults = document.getElementById('map-search-results');
+
+mapSearchInput.addEventListener('input', () => {
+  const q = mapSearchInput.value.trim().toLowerCase();
+  if (!q) {
+    mapSearchClear.style.display = 'none';
+    mapSearchResults.style.display = 'none';
+    mapSearchResults.innerHTML = '';
+    return;
+  }
+  mapSearchClear.style.display = 'block';
+  
+  // Filtra as escolas por nome, bairro ou endereço
+  const matches = ESCOLAS.filter(e => 
+    (e.nome + ' ' + e.bairro + ' ' + e.endereco).toLowerCase().includes(q)
+  ).slice(0, 5); // limite de 5 sugestões
+  
+  if (matches.length === 0) {
+    mapSearchResults.innerHTML = '<div class="collected-empty">Nenhuma escola encontrada</div>';
+  } else {
+    mapSearchResults.innerHTML = matches.map(e => `
+      <div class="search-result-item" data-id="${e.id}">
+        <div class="sri-title">${e.nome}</div>
+        <div class="sri-meta">${e.bairro} · ${e.local}</div>
+      </div>
+    `).join('');
+    
+    // Vincula o clique em um resultado da pesquisa
+    mapSearchResults.querySelectorAll('.search-result-item').forEach(item => {
+      item.onclick = () => {
+        const id = parseInt(item.dataset.id);
+        const e = ESCOLAS.find(x => x.id === id);
+        if (e) {
+          map.flyTo([e.lat, e.lng], 16, { duration: 1.2 });
+          setTimeout(() => {
+            const m = STATE.schoolMarkers[id];
+            if (m) m.openPopup();
+          }, 1300);
+          
+          if (isMobileLayout()) closeSidebar();
+        }
+        // Limpa a caixa e esconde resultados
+        mapSearchInput.value = '';
+        mapSearchClear.style.display = 'none';
+        mapSearchResults.style.display = 'none';
+        mapSearchResults.innerHTML = '';
+      };
+    });
+  }
+  mapSearchResults.style.display = 'block';
+});
+
+mapSearchClear.onclick = () => {
+  mapSearchInput.value = '';
+  mapSearchClear.style.display = 'none';
+  mapSearchResults.style.display = 'none';
+  mapSearchResults.innerHTML = '';
+};
+
+// Oculta sugestões se clicar fora do container de busca
+document.addEventListener('click', e => {
+  if (!e.target.closest('#map-search-container')) {
+    mapSearchResults.style.display = 'none';
+  }
+});
 </script>
 </body>
 </html>
