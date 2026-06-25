@@ -1,0 +1,12 @@
+# Dados vetoriais originais (não publicados — já embutidos no index.html)
+02 Dados Vetoriais/
+
+# Arquivos auxiliares de extração
+*.json
+escolas_array.js
+
+# Sistema / temporários
+Thumbs.db
+.DS_Store
+*.log
+~$*

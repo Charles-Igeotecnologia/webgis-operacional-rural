@@ -1,0 +1,2070 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>WebGIS Operacional Rural</title>
+
+<!-- Leaflet -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- Plugins -->
+<script src="https://unpkg.com/leaflet-providers@1.13.0/leaflet-providers.js"></script>
+<script src="https://unpkg.com/leaflet-kml@2.0.2/L.KML.js"></script>
+<script src="https://unpkg.com/@mapbox/leaflet-omnivore@0.3.4/leaflet-omnivore.min.js"></script>
+
+<style>
+:root {
+  --bg-main: #070707;
+  --bg-panel: rgba(16, 16, 16, 0.88);
+  --bg-panel-soft: rgba(24, 24, 24, 0.78);
+  --border-soft: rgba(255, 255, 255, 0.10);
+  --border-amber: rgba(255, 132, 38, 0.45);
+  --text-main: #f5f5f5;
+  --text-muted: #a8a29e;
+  --text-soft: #d6d3d1;
+  --amber: #ff8426;
+  --amber-light: #ffb36b;
+  --amber-dark: #9a4f16;
+  --green: #35d07f;
+  --blue: #38bdf8;
+  --red: #ef4444;
+  --shadow-amber: 0 0 28px rgba(255, 132, 38, 0.35);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  background: var(--bg-main);
+  color: var(--text-main);
+  font-family: 'Segoe UI', 'Inter', system-ui, -apple-system, sans-serif;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ===== ÍCONES (sprite SVG de traço fino, estilo minimalista) ===== */
+.icon {
+  width: 18px; height: 18px;
+  stroke: currentColor; fill: none;
+  stroke-width: 1.75;
+  stroke-linecap: round; stroke-linejoin: round;
+  display: inline-block; vertical-align: middle; flex-shrink: 0;
+}
+.icon.sm { width: 14px; height: 14px; }
+.icon.lg { width: 20px; height: 20px; }
+.icon-svg { display: none; }
+
+/* ===== LAYOUT GERAL ===== */
+#app {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: 100vh;
+}
+
+/* ===== CABEÇALHO ===== */
+.header {
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 18px;
+  background: var(--bg-panel);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--border-amber);
+  box-shadow: 0 4px 22px rgba(0,0,0,0.6);
+}
+.brand {
+  display: flex; align-items: center; gap: 10px;
+  padding-right: 16px;
+  border-right: 1px solid var(--border-soft);
+}
+.brand-logo {
+  height: 46px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.brand-logo img {
+  height: 100%; width: auto;
+  object-fit: contain; display: block;
+}
+.brand-text { line-height: 1.15; }
+.brand-title {
+  font-size: 13px; font-weight: 700; letter-spacing: 1px;
+  color: var(--amber-light);
+}
+.brand-sub {
+  font-size: 10px; color: var(--text-muted); letter-spacing: .5px; text-transform: uppercase;
+  margin-top: 1px;
+}
+/* Indicadores rápidos */
+.indicators {
+  display: flex; gap: 10px; flex: 1; overflow-x: auto;
+}
+.indicator {
+  background: var(--bg-panel-soft);
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  padding: 7px 14px;
+  display: flex; flex-direction: column; align-items: center;
+  min-width: 88px;
+  transition: border-color .2s, box-shadow .2s;
+}
+.indicator:hover { border-color: rgba(255,132,38,0.5); }
+.indicator-num {
+  font-size: 20px; font-weight: 800;
+  background: linear-gradient(135deg, var(--amber-light), var(--amber));
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  line-height: 1;
+}
+.indicator-label {
+  font-size: 9px; color: var(--text-muted); letter-spacing: .8px; text-transform: uppercase; margin-top: 3px;
+  white-space: nowrap;
+}
+.header-actions { display: flex; gap: 8px; }
+.icon-btn {
+  width: 38px; height: 38px;
+  background: var(--bg-panel-soft);
+  border: 1px solid var(--border-soft);
+  border-radius: 9px;
+  color: var(--text-soft);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: border-color .2s, color .2s, background .2s;
+}
+.icon-btn:hover { border-color: rgba(255,132,38,0.6); color: var(--amber-light); background: rgba(255,132,38,0.08); }
+.icon-btn.active { background: rgba(255,132,38,0.9); color: #1a0a00; border-color: var(--amber); }
+
+/* ===== CORPO ===== */
+.body {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ===== SIDEBAR ===== */
+.sidebar {
+  width: 300px;
+  background: var(--bg-panel);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-right: 1px solid var(--border-soft);
+  display: flex; flex-direction: column;
+  overflow-y: auto;
+  transition: width .28s ease, padding .28s ease;
+  z-index: 1000;
+}
+.sidebar.collapsed { width: 0; border-right: none; overflow: hidden; }
+.sidebar-inner {
+  padding: 14px;
+  min-width: 300px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.module {
+  background: var(--bg-panel-soft);
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.module-head {
+  display: flex; align-items: center; gap: 9px;
+  padding: 11px 13px;
+  cursor: pointer;
+  user-select: none;
+  transition: background .2s;
+}
+.module-head:hover { background: rgba(255,132,38,0.08); }
+.module-icon {
+  width: 26px; height: 26px;
+  border-radius: 7px;
+  background: rgba(255,132,38,0.14);
+  color: var(--amber-light);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.module-title {
+  font-size: 12px; font-weight: 600; letter-spacing: .5px;
+  text-transform: uppercase; color: var(--text-main); flex: 1;
+}
+.module-toggle { color: var(--text-muted); transition: transform .25s ease; display: flex; align-items: center; }
+.module.open .module-toggle { transform: rotate(90deg); }
+.module-body {
+  max-height: 0; overflow: hidden;
+  transition: max-height .3s ease;
+}
+.module.open .module-body { max-height: 600px; }
+.module-content { padding: 4px 13px 13px; }
+
+/* Botões dentro de módulos */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--border-amber);
+  background: rgba(255,132,38,0.10);
+  color: var(--amber-light);
+  border-radius: 8px;
+  font-size: 12px; font-weight: 600; letter-spacing: .4px;
+  cursor: pointer;
+  transition: all .2s;
+  font-family: inherit;
+}
+.btn:hover { background: var(--amber); color: #1a0a00; box-shadow: 0 0 14px rgba(255, 132, 38, 0.30); }
+.btn.secondary {
+  border-color: var(--border-soft);
+  background: var(--bg-panel);
+  color: var(--text-soft);
+}
+.btn.secondary:hover { border-color: var(--amber); color: var(--amber-light); }
+.btn-row { display: flex; gap: 8px; margin-top: 8px; }
+
+/* Lista de camadas */
+.layer-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 12px;
+}
+.layer-item:last-child { border-bottom: none; }
+.layer-toggle {
+  position: relative; width: 34px; height: 18px;
+  flex-shrink: 0;
+}
+.layer-toggle input { opacity: 0; width: 0; height: 0; }
+.layer-slider {
+  position: absolute; inset: 0; cursor: pointer;
+  background: rgba(255,255,255,0.12); border-radius: 18px;
+  transition: .25s;
+}
+.layer-slider::before {
+  content: ""; position: absolute;
+  width: 14px; height: 14px; left: 2px; top: 2px;
+  background: var(--text-soft); border-radius: 50%;
+  transition: .25s;
+}
+.layer-toggle input:checked + .layer-slider { background: var(--amber); }
+.layer-toggle input:checked + .layer-slider::before { transform: translateX(16px); background: #fff; }
+.layer-name { flex: 1; color: var(--text-soft); }
+.layer-swatch {
+  width: 12px; height: 12px; border-radius: 50%;
+  flex-shrink: 0; border: 1px solid rgba(255,255,255,0.3);
+}
+
+/* Escolas prioritárias */
+.priority-school {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all .2s;
+  margin-bottom: 5px;
+}
+.priority-school:hover { background: rgba(255,132,38,0.10); border-color: var(--border-amber); }
+.priority-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: radial-gradient(circle, var(--amber-light), var(--amber));
+  box-shadow: 0 0 10px var(--amber);
+  flex-shrink: 0;
+}
+.priority-info { flex: 1; min-width: 0; }
+.priority-name { font-size: 12px; font-weight: 600; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.priority-meta { font-size: 10px; color: var(--text-muted); }
+
+/* Inputs */
+.field { margin-bottom: 8px; }
+.field label { display: block; font-size: 10px; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .6px; }
+.field input, .field textarea, .field select {
+  width: 100%;
+  padding: 8px 10px;
+  background: rgba(0,0,0,0.4);
+  border: 1px solid var(--border-soft);
+  border-radius: 7px;
+  color: var(--text-main);
+  font-size: 12px;
+  font-family: inherit;
+}
+.field input:focus, .field textarea:focus { outline: none; border-color: var(--amber); box-shadow: 0 0 0 2px rgba(255,132,38,0.15); }
+.field textarea { resize: vertical; min-height: 50px; }
+.hint { font-size: 10px; color: var(--text-muted); margin-top: 5px; line-height: 1.4; }
+
+/* Pontos coletados list */
+.collected-empty { font-size: 11px; color: var(--text-muted); text-align: center; padding: 14px 0; font-style: italic; }
+.collected-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 6px;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 11px;
+}
+.collected-item:last-child { border-bottom: none; }
+.collected-item .ci-name { flex: 1; color: var(--text-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.collected-item .ci-del { color: var(--red); cursor: pointer; opacity: .6; }
+.collected-item .ci-del:hover { opacity: 1; }
+
+/* ===== MAPA ===== */
+.map-wrap { position: relative; }
+#map {
+  position: absolute; inset: 0;
+  background: #0a0a0a;
+  z-index: 1;
+}
+/* Linhas de gradiente sobre o mapa */
+.map-wrap::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 500;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(255,132,38,0.06), transparent 50%);
+}
+
+/* Leaflet dark overrides */
+.leaflet-container { background: #0a0a0a !important; }
+.leaflet-bar, .leaflet-control-zoom { border: none !important; }
+.leaflet-control-zoom {
+  margin-bottom: 30px !important;   /* sobe acima da faixa de atribuicao */
+  border: 1px solid var(--border-soft) !important;
+  border-radius: 10px !important;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+}
+.leaflet-control-zoom a {
+  background: var(--bg-panel) !important;
+  color: var(--text-soft) !important;
+  border: 1px solid var(--border-soft) !important;
+  backdrop-filter: blur(8px);
+  width: 34px !important; height: 34px !important;
+  line-height: 34px !important;
+  font-size: 17px !important;
+}
+.leaflet-control-zoom a:hover { background: rgba(255,132,38,0.2) !important; color: var(--amber-light) !important; border-color: var(--amber) !important; }
+.leaflet-control-attribution {
+  background: rgba(10,10,10,0.7) !important;
+  color: var(--text-muted) !important;
+  backdrop-filter: blur(6px);
+  font-size: 9px !important;
+}
+.leaflet-control-attribution a { color: var(--text-soft) !important; }
+
+/* Popup */
+.leaflet-popup-content-wrapper {
+  background: var(--bg-panel) !important;
+  color: var(--text-main) !important;
+  border: 1px solid var(--border-amber) !important;
+  border-radius: 12px !important;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.6), var(--shadow-amber) !important;
+}
+.leaflet-popup-tip { background: var(--bg-panel) !important; border: 1px solid var(--border-amber) !important; }
+.leaflet-popup-content { margin: 0 !important; width: 230px !important; }
+/* Tooltip de vértice (modo medição) */
+.leaflet-tooltip.vertex-tip {
+  background: var(--bg-panel) !important;
+  color: var(--amber-light) !important;
+  border: 1px solid var(--border-amber) !important;
+  border-radius: 6px !important;
+  font-size: 10px !important; font-weight: 700;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.5) !important;
+}
+.leaflet-tooltip.vertex-tip::before { display: none; }
+.popup-card { padding: 12px 14px; }
+.popup-tag {
+  display: inline-block;
+  font-size: 9px; font-weight: 700; letter-spacing: 1px;
+  padding: 2px 8px; border-radius: 10px;
+  margin-bottom: 7px;
+  text-transform: uppercase;
+}
+.popup-tag.priority { background: rgba(255,132,38,0.2); color: var(--amber-light); border: 1px solid var(--border-amber); }
+.popup-tag.ribeirinha { background: rgba(56,189,248,0.15); color: var(--blue); border: 1px solid rgba(56,189,248,0.4); }
+.popup-tag.rodoviaria { background: rgba(53,208,127,0.15); color: var(--green); border: 1px solid rgba(53,208,127,0.4); }
+.popup-name { font-size: 14px; font-weight: 700; color: var(--text-main); margin-bottom: 6px; line-height: 1.25; }
+.popup-row { display: flex; gap: 6px; font-size: 11px; margin-top: 4px; color: var(--text-muted); }
+.popup-row b { color: var(--text-soft); font-weight: 600; }
+.popup-coords { font-size: 10px; color: var(--text-muted); margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-soft); font-family: monospace; }
+
+/* ===== MARCADORES CUSTOM ===== */
+.school-priority-marker {
+  width: 26px; height: 26px;
+  background: radial-gradient(circle, #ffb36b 0%, #ff8426 45%, #7c2d12 100%);
+  border: 2px solid #ffd7a3;
+  border-radius: 50%;
+  box-shadow: 0 0 24px rgba(255, 132, 38, 0.85);
+  animation: amberPulse 1.8s infinite;
+}
+@keyframes amberPulse {
+  0% { box-shadow: 0 0 0 0 rgba(255, 132, 38, 0.65); transform: scale(1); }
+  70% { box-shadow: 0 0 0 28px rgba(255, 132, 38, 0); transform: scale(1.08); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 132, 38, 0); transform: scale(1); }
+}
+.school-normal-marker {
+  width: 12px; height: 12px;
+  background: var(--amber);
+  border: 2px solid rgba(255,255,255,0.5);
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(255,132,38,0.5);
+}
+.collected-point-marker {
+  width: 16px; height: 16px;
+  background: var(--green);
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 12px rgba(53,208,127,0.7);
+}
+.user-sonar-marker {
+  width: 24px; height: 24px;
+  background: #38bdf8;
+  border: 3px solid white;
+  border-radius: 50%;
+  box-shadow: 0 0 0 rgba(56, 189, 248, 0.7);
+  animation: userSonar 1.5s infinite;
+}
+@keyframes userSonar {
+  0% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.75); }
+  70% { box-shadow: 0 0 0 32px rgba(56, 189, 248, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0); }
+}
+
+/* ===== CONTROLES FLUTUANTES NO MAPA ===== */
+.map-control-bar {
+  position: absolute;
+  top: 12px; right: 12px;
+  z-index: 600;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.map-tool {
+  background: var(--bg-panel);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-soft);
+  border-radius: 9px;
+  width: 40px; height: 40px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-soft);
+  cursor: pointer;
+  transition: border-color .2s, color .2s, background .2s;
+}
+.map-tool:hover { border-color: rgba(255,132,38,0.6); color: var(--amber-light); background: rgba(255,132,38,0.08); }
+.map-tool.active { background: rgba(255,132,38,0.9); color: #1a0a00; border-color: var(--amber); }
+
+/* Seletor de base flutuante */
+.base-switcher {
+  position: absolute;
+  bottom: 30px; left: 12px;
+  z-index: 600;
+  background: var(--bg-panel);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  padding: 6px;
+  display: flex; gap: 4px;
+}
+.base-btn {
+  padding: 7px 13px;
+  border-radius: 7px;
+  font-size: 11px; font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  border: none; background: transparent;
+  font-family: inherit;
+  transition: all .2s;
+}
+.base-btn.active { background: var(--amber); color: #1a0a00; }
+.base-btn:not(.active):hover { color: var(--text-soft); background: rgba(255,255,255,0.06); }
+
+/* Barra de medição */
+.measure-bar {
+  position: absolute;
+  top: 12px; left: 12px;
+  z-index: 600;
+  background: var(--bg-panel);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-amber);
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 12px;
+  display: none;
+  align-items: center; gap: 14px;
+}
+.measure-bar.show { display: flex; }
+.measure-val { color: var(--amber-light); font-weight: 700; font-family: monospace; }
+.measure-close { color: var(--text-muted); cursor: pointer; margin-left: 4px; }
+.measure-close:hover { color: var(--red); }
+
+/* ===== RODAPÉ ===== */
+.footer {
+  z-index: 1100;
+  background: var(--bg-panel);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-top: 1px solid var(--border-amber);
+  padding: 8px 18px;
+  display: flex; align-items: center; gap: 14px;
+  font-size: 11px;
+  box-shadow: 0 -4px 22px rgba(0,0,0,0.5);
+}
+.footer-status { display: flex; align-items: center; gap: 7px; color: var(--text-muted); }
+.status-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--green); box-shadow: 0 0 8px var(--green);
+  animation: blink 2s infinite;
+}
+@keyframes blink { 50% { opacity: .4; } }
+.footer-coords { color: var(--amber-light); font-family: monospace; font-size: 11px; }
+.footer-text { flex: 1; color: var(--text-muted); text-align: center; font-style: italic; letter-spacing: .3px; }
+
+/* ===== TOAST ===== */
+#toast-container {
+  position: fixed; bottom: 70px; left: 50%; transform: translateX(-50%);
+  z-index: 3000; display: flex; flex-direction: column; gap: 8px; align-items: center;
+  pointer-events: none;
+}
+.toast {
+  background: var(--bg-panel);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--border-amber);
+  border-radius: 10px;
+  padding: 11px 20px;
+  font-size: 12px; color: var(--text-main);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.6), var(--shadow-amber);
+  animation: toastIn .3s ease;
+  display: flex; align-items: center; gap: 9px;
+}
+.toast.error { border-color: var(--red); }
+.toast.success { border-color: var(--green); }
+@keyframes toastIn { from { opacity: 0; transform: translateY(15px); } }
+
+/* ===== CAMPOS EDITÁVEIS NOS POPUPS ===== */
+.popup-desc {
+  margin: 6px 0;
+}
+.popup-desc textarea {
+  width: 100%; min-height: 46px;
+  background: rgba(0,0,0,0.4);
+  border: 1px solid var(--border-soft);
+  border-radius: 7px;
+  color: var(--text-main);
+  font-size: 12px; font-family: inherit;
+  padding: 7px 9px; resize: vertical;
+}
+.popup-desc textarea:focus { outline: none; border-color: var(--amber); box-shadow: 0 0 0 2px rgba(255,132,38,0.15); }
+.popup-actions { display: flex; gap: 7px; margin-top: 8px; flex-wrap: wrap; }
+.popup-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 6px 10px;
+  border-radius: 7px;
+  font-size: 11px; font-weight: 600;
+  cursor: pointer; font-family: inherit;
+  text-decoration: none;
+  border: 1px solid var(--border-soft);
+  background: var(--bg-panel-soft);
+  color: var(--text-soft);
+  transition: all .2s;
+}
+.popup-btn:hover { border-color: var(--amber); color: var(--amber-light); }
+.popup-btn.save { background: rgba(53,208,127,0.15); color: var(--green); border-color: rgba(53,208,127,0.4); }
+.popup-btn.save:hover { background: var(--green); color: #04210f; }
+.popup-btn.gmaps { background: rgba(56,189,248,0.12); color: var(--blue); border-color: rgba(56,189,248,0.35); }
+.popup-btn.gmaps:hover { background: var(--blue); color: #03212e; }
+.popup-btn.del { background: rgba(239,68,68,0.10); color: var(--red); border-color: rgba(239,68,68,0.3); }
+.popup-btn.del:hover { background: var(--red); color: #2b0606; }
+.popup-hint { font-size: 9px; color: var(--text-muted); margin-top: 4px; font-style: italic; }
+
+/* ===== MODAL TABELA DE ATRIBUTOS ===== */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 4000;
+  background: rgba(0,0,0,0.72);
+  backdrop-filter: blur(6px);
+  display: none;
+  align-items: center; justify-content: center;
+  padding: 30px;
+}
+.modal-overlay.show { display: flex; }
+.modal {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-amber);
+  border-radius: 14px;
+  width: 100%; max-width: 1100px; height: 100%; max-height: 720px;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.7), var(--shadow-amber);
+}
+.modal-head {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.modal-title { font-size: 14px; font-weight: 700; letter-spacing: 1px; color: var(--amber-light); flex: 1; text-transform: uppercase; }
+.modal-search {
+  background: rgba(0,0,0,0.4);
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  color: var(--text-main);
+  font-size: 12px; padding: 7px 12px;
+  width: 240px; font-family: inherit;
+}
+.modal-search:focus { outline: none; border-color: var(--amber); }
+.modal-close {
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  background: rgba(239,68,68,0.1);
+  border: 1px solid rgba(239,68,68,0.3);
+  color: var(--red); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.modal-close:hover { background: var(--red); color: #2b0606; }
+.modal-tabs { display: flex; gap: 4px; padding: 0 18px; border-bottom: 1px solid var(--border-soft); }
+.modal-tab {
+  padding: 9px 14px;
+  font-size: 11px; font-weight: 600; letter-spacing: .4px;
+  color: var(--text-muted); cursor: pointer;
+  border: none; background: transparent; font-family: inherit;
+  border-bottom: 2px solid transparent;
+  text-transform: uppercase;
+}
+.modal-tab.active { color: var(--amber-light); border-bottom-color: var(--amber); }
+.modal-tab:hover { color: var(--text-soft); }
+.modal-body { flex: 1; overflow: auto; }
+.attr-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.attr-table thead { position: sticky; top: 0; background: var(--bg-panel); z-index: 2; }
+.attr-table th {
+  text-align: left; padding: 10px 12px;
+  font-size: 10px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase;
+  color: var(--amber-light);
+  border-bottom: 1px solid var(--border-amber);
+  white-space: nowrap;
+}
+.attr-table td { padding: 6px 12px; border-bottom: 1px solid var(--border-soft); color: var(--text-soft); vertical-align: middle; }
+.attr-table tr:hover { background: rgba(255,132,38,0.05); }
+.attr-table input.cell {
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--text-main);
+  font-size: 12px; font-family: inherit;
+  padding: 5px 7px;
+}
+.attr-table input.cell:hover { border-color: var(--border-soft); }
+.attr-table input.cell:focus { outline: none; border-color: var(--amber); background: rgba(0,0,0,0.4); }
+.attr-type {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 10px;
+  text-transform: uppercase; letter-spacing: .5px; white-space: nowrap;
+}
+.attr-type.t-point { background: rgba(53,208,127,0.15); color: var(--green); }
+.attr-type.t-line { background: rgba(56,189,248,0.15); color: var(--blue); }
+.attr-type.t-poly { background: rgba(255,132,38,0.15); color: var(--amber-light); }
+.attr-type.t-school { background: rgba(168,162,158,0.15); color: var(--text-soft); }
+.attr-actions { display: flex; gap: 6px; white-space: nowrap; }
+.attr-act {
+  width: 26px; height: 26px; border-radius: 6px;
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer; border: 1px solid var(--border-soft);
+  background: var(--bg-panel-soft); color: var(--text-muted);
+  transition: all .15s;
+}
+.attr-act:hover { border-color: var(--amber); color: var(--amber-light); }
+.attr-act.del:hover { border-color: var(--red); color: var(--red); background: rgba(239,68,68,0.1); }
+.modal-foot {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 18px;
+  border-top: 1px solid var(--border-soft);
+  font-size: 11px; color: var(--text-muted);
+}
+.modal-empty { padding: 50px 20px; text-align: center; color: var(--text-muted); font-size: 13px; }
+
+/* Scrollbar */
+.sidebar::-webkit-scrollbar { width: 6px; }
+.sidebar::-webkit-scrollbar-track { background: transparent; }
+.sidebar::-webkit-scrollbar-thumb { background: rgba(255,132,38,0.3); border-radius: 3px; }
+
+.hidden-file { display: none; }
+
+/* Responsivo */
+@media (max-width: 720px) {
+  .indicators { display: none; }
+  .sidebar { position: absolute; top: 0; bottom: 0; left: 0; width: 86%; max-width: 320px; }
+  .footer-text { display: none; }
+}
+</style>
+</head>
+<body>
+
+<!-- ===== SPRITE DE ÍCONES (SVG de traço fino, monocromático via currentColor) ===== -->
+<svg class="icon-svg" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11a7 7 0 1 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 3 2.5 8 12 13l9.5-5L12 3z"/><path d="M2.5 12 12 17l9.5-5"/><path d="M2.5 16 12 21l9.5-5"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L4 9.7l5.9-.9L12 3.5z"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 11l5 4 5-4"/><path d="M5 20h14"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 21V9"/><path d="M7 13l5-4 5 4"/><path d="M5 4h14"/></symbol>
+  <symbol id="i-gps" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8" opacity=".5"/></symbol>
+  <symbol id="i-ruler" viewBox="0 0 24 24"><path d="M3 17 17 3l4 4L7 21z"/><path d="M9 7l2 2M13 11l2 2M7 9l2 2"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></symbol>
+  <symbol id="i-satellite" viewBox="0 0 24 24"><path d="M5 13a7 7 0 0 0 6 6"/><path d="M5 8a12 12 0 0 1 11 11"/><circle cx="5" cy="5" r="2"/><path d="M10 14l4-4"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1"/></symbol>
+  <symbol id="i-route" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.5 6H15a3.5 3.5 0 0 1 0 7H9a3.5 3.5 0 0 0 0 7h6.5"/></symbol>
+  <symbol id="i-poly" viewBox="0 0 24 24"><path d="M12 3l8 5v8l-8 5-8-5V8z"/><path d="M4 8l8 5 8-5M12 13v8"/></symbol>
+  <symbol id="i-line" viewBox="0 0 24 24"><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="5" r="2.5"/><path d="M7 17L17 7"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3 2 20h20L12 3z"/><path d="M12 9v5M12 17.5v.5"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.5v.5"/></symbol>
+  <symbol id="i-map" viewBox="0 0 24 24"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/></symbol>
+  <symbol id="i-table" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 9h18M3 14h18M9 4v16M15 4v16"/></symbol>
+  <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M14 6l4 4"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+</svg>
+
+<div id="app">
+
+  <!-- ===== CABEÇALHO ===== -->
+  <header class="header">
+    <div class="brand">
+      <div class="brand-logo"><img src="logo_manaus.png" alt="Prefeitura de Manaus" onerror="this.onerror=null;this.src='https://www.manaus.am.gov.br/wp-content/uploads/2026/04/LogoRetBraTransp.png'"></div>
+      <div class="brand-text">
+        <div class="brand-title">WebGIS Operacional Rural</div>
+        <div class="brand-sub">Secretaria Municipal de Educação — Setor de Geotecnologia</div>
+      </div>
+    </div>
+    <div class="indicators" id="indicators">
+      <div class="indicator"><div class="indicator-num" id="ind-schools">85</div><div class="indicator-label">Escolas</div></div>
+      <div class="indicator"><div class="indicator-num" id="ind-priority">3</div><div class="indicator-label">Prioritárias</div></div>
+      <div class="indicator"><div class="indicator-num" id="ind-students">12.075</div><div class="indicator-label">Alunos</div></div>
+      <div class="indicator"><div class="indicator-num" id="ind-features">0</div><div class="indicator-label">Feições Coletadas</div></div>
+      <div class="indicator"><div class="indicator-num" id="ind-kml">0</div><div class="indicator-label">Camadas KML</div></div>
+    </div>
+    <div class="header-actions">
+      <button class="icon-btn" id="btn-table" title="Tabela de atributos"><svg class="icon"><use href="#i-table"/></svg></button>
+      <button class="icon-btn" id="btn-toggle-sidebar" title="Mostrar/ocultar painel"><svg class="icon"><use href="#i-menu"/></svg></button>
+      <button class="icon-btn" id="btn-locate" title="Minha localização"><svg class="icon"><use href="#i-gps"/></svg></button>
+      <button class="icon-btn" id="btn-fit" title="Ajustar à extensão"><svg class="icon"><use href="#i-target"/></svg></button>
+    </div>
+  </header>
+
+  <!-- ===== CORPO ===== -->
+  <div class="body">
+
+    <!-- ===== SIDEBAR ===== -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-inner">
+
+        <!-- Módulo: Escolas prioritárias -->
+        <div class="module open" id="mod-priority">
+          <div class="module-head"><div class="module-icon"><svg class="icon sm"><use href="#i-star"/></svg></div><div class="module-title">Escolas Prioritárias</div><div class="module-toggle"><svg class="icon sm"><use href="#i-chev"/></svg></div></div>
+          <div class="module-body"><div class="module-content">
+            <div id="priority-list"></div>
+            <div class="field" style="margin-top:10px;">
+              <label>Adicionar escola prioritária</label>
+              <input type="text" id="priority-search" placeholder="Buscar escola por nome ou bairro..." autocomplete="off">
+            </div>
+            <div id="priority-picker" style="margin-top:6px;max-height:200px;overflow-y:auto;"></div>
+          </div></div>
+        </div>
+
+        <!-- Módulo: Camadas -->
+        <div class="module open" id="mod-layers">
+          <div class="module-head"><div class="module-icon"><svg class="icon sm"><use href="#i-layers"/></svg></div><div class="module-title">Camadas</div><div class="module-toggle"><svg class="icon sm"><use href="#i-chev"/></svg></div></div>
+          <div class="module-body"><div class="module-content" id="layers-list"></div></div>
+        </div>
+
+        <!-- Módulo: Coletar ponto -->
+        <div class="module" id="mod-collect">
+          <div class="module-head"><div class="module-icon"><svg class="icon sm"><use href="#i-plus"/></svg></div><div class="module-title">Coletar Ponto</div><div class="module-toggle"><svg class="icon sm"><use href="#i-chev"/></svg></div></div>
+          <div class="module-body"><div class="module-content">
+            <div class="hint">Use as ferramentas <b>✚ ponto</b>, <b>linha</b> ou <b>polígono</b> no mapa. Para ponto, também é possível coletar pela sua posição de GPS.</div>
+            <div class="btn-row" style="flex-direction:column;gap:6px;margin-top:10px;">
+              <button class="btn" id="btn-collect-gps"><svg class="icon sm" style="color:inherit"><use href="#i-plus"/></svg> Coletar na minha posição</button>
+              <button class="btn secondary" id="btn-collect-click"><svg class="icon sm" style="color:inherit"><use href="#i-target"/></svg> Marcar ponto no mapa</button>
+            </div>
+            <div class="field" style="margin-top:10px;">
+              <label>Descrição do ponto</label>
+              <input type="text" id="collect-desc" placeholder="Ex.: Acesso de barco, ponto de referência...">
+            </div>
+            <div id="collected-list" style="margin-top:10px;">
+              <div class="collected-empty">Nenhum ponto coletado.</div>
+            </div>
+          </div></div>
+        </div>
+
+        <!-- Módulo: Importar KML -->
+        <div class="module" id="mod-kml">
+          <div class="module-head"><div class="module-icon"><svg class="icon sm"><use href="#i-download"/></svg></div><div class="module-title">Importar KML</div><div class="module-toggle"><svg class="icon sm"><use href="#i-chev"/></svg></div></div>
+          <div class="module-body"><div class="module-content">
+            <div class="hint">Carregue um arquivo <b>.kml</b> ou <b>.kmz</b> com rotas, áreas ou pontos de interesse.</div>
+            <div class="btn-row" style="margin-top:10px;">
+              <button class="btn" onclick="document.getElementById('kml-file').click()"><svg class="icon sm" style="color:inherit"><use href="#i-download"/></svg> Selecionar arquivo</button>
+            </div>
+            <input type="file" id="kml-file" class="hidden-file" accept=".kml,.kml">
+            <div id="kml-list" style="margin-top:8px;"></div>
+          </div></div>
+        </div>
+
+        <!-- Módulo: Exportar KML -->
+        <div class="module" id="mod-export">
+          <div class="module-head"><div class="module-icon"><svg class="icon sm"><use href="#i-upload"/></svg></div><div class="module-title">Exportar KML</div><div class="module-toggle"><svg class="icon sm"><use href="#i-chev"/></svg></div></div>
+          <div class="module-body"><div class="module-content">
+            <div class="hint">Exporta todos os pontos coletados e as 3 escolas prioritárias em um arquivo KML para uso em Google Earth / QGIS.</div>
+            <div class="btn-row" style="margin-top:10px;">
+              <button class="btn" id="btn-export-kml"><svg class="icon sm" style="color:inherit"><use href="#i-upload"/></svg> Baixar KML</button>
+            </div>
+          </div></div>
+        </div>
+
+        <!-- Módulo: Localização -->
+        <div class="module" id="mod-loc">
+          <div class="module-head"><div class="module-icon"><svg class="icon sm"><use href="#i-gps"/></svg></div><div class="module-title">Localização Atual</div><div class="module-toggle"><svg class="icon sm"><use href="#i-chev"/></svg></div></div>
+          <div class="module-body"><div class="module-content">
+            <div class="hint">Rastreia sua posição em tempo real no terreno. Requer permissão de GPS do navegador.</div>
+            <div class="btn-row" style="flex-direction:column;gap:6px;margin-top:10px;">
+              <button class="btn" id="btn-track-start"><svg class="icon sm" style="color:inherit"><use href="#i-play"/></svg> Iniciar rastreamento</button>
+              <button class="btn secondary" id="btn-track-stop"><svg class="icon sm" style="color:inherit"><use href="#i-stop"/></svg> Parar</button>
+            </div>
+            <div id="loc-info" style="margin-top:10px;font-size:11px;color:var(--text-muted);"></div>
+          </div></div>
+        </div>
+
+      </div>
+    </aside>
+
+    <!-- ===== MAPA ===== -->
+    <div class="map-wrap">
+      <div id="map"></div>
+
+      <!-- Barra de medição -->
+      <div class="measure-bar" id="measure-bar">
+        <span id="measure-title" style="font-weight:700;color:var(--amber-light);letter-spacing:.5px">MEDIÇÃO</span>
+        <span style="display:inline-flex;align-items:center;gap:5px"><svg class="icon sm" style="color:var(--amber-light)"><use href="#i-line"/></svg> <span id="measure-dist-label">Distância:</span> <span class="measure-val" id="measure-dist">—</span></span>
+        <span id="measure-area-wrap" style="display:none"><span style="display:inline-flex;align-items:center;gap:5px"><svg class="icon sm" style="color:var(--amber-light)"><use href="#i-poly"/></svg> Área: <span class="measure-val" id="measure-area">—</span></span></span>
+        <span class="measure-close" id="measure-clear" style="display:inline-flex;align-items:center;gap:4px"><svg class="icon sm"><use href="#i-x"/></svg> limpar</span>
+      </div>
+
+      <!-- Ferramentas de mapa: Ponto / Linha / Polígono -->
+      <div class="map-control-bar">
+        <button class="map-tool" id="tool-point" title="Coletar ponto"><svg class="icon"><use href="#i-plus"/></svg></button>
+        <button class="map-tool" id="tool-line" title="Medir distância (linha)"><svg class="icon"><use href="#i-line"/></svg></button>
+        <button class="map-tool" id="tool-poly" title="Medir área (polígono)"><svg class="icon"><use href="#i-poly"/></svg></button>
+      </div>
+
+      <!-- Seletor de base -->
+      <div class="base-switcher">
+        <button class="base-btn active" data-base="satellite"><svg class="icon sm" style="color:inherit;display:inline-block;vertical-align:-2px;margin-right:4px"><use href="#i-satellite"/></svg>Satélite</button>
+        <button class="base-btn" data-base="dark"><svg class="icon sm" style="color:inherit;display:inline-block;vertical-align:-2px;margin-right:4px"><use href="#i-moon"/></svg>Escuro</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== RODAPÉ ===== -->
+  <footer class="footer">
+    <div class="footer-status"><span class="status-dot"></span><span id="status-text">Sistema pronto</span></div>
+    <div class="footer-coords" id="footer-coords">— ° , — °</div>
+    <div class="footer-text">Base territorial de apoio à visita técnica, navegação em campo e registro local de evidências geoespaciais.</div>
+  </footer>
+</div>
+
+<div id="toast-container"></div>
+
+<!-- ===== MODAL TABELA DE ATRIBUTOS ===== -->
+<div class="modal-overlay" id="attr-modal">
+  <div class="modal">
+    <div class="modal-head">
+      <svg class="icon" style="color:var(--amber-light)"><use href="#i-table"/></svg>
+      <div class="modal-title">Tabela de Atributos</div>
+      <input type="text" class="modal-search" id="attr-search" placeholder="Buscar feição...">
+      <button class="modal-close" id="attr-close"><svg class="icon sm"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="modal-tabs" id="attr-tabs"></div>
+    <div class="modal-body">
+      <table class="attr-table">
+        <thead><tr>
+          <th>Tipo</th><th>Nome / Descrição</th><th>Bairro / Local</th>
+          <th>Coordenadas / Medida</th><th style="text-align:right">Ações</th>
+        </tr></thead>
+        <tbody id="attr-tbody"></tbody>
+      </table>
+      <div class="modal-empty" id="attr-empty" style="display:none">Nenhuma feição encontrada.</div>
+    </div>
+    <div class="modal-foot">
+      <span id="attr-count">0 feições</span>
+      <span style="flex:1"></span>
+      <span>Duplo-clique numa célula para editar · alterações são salvas automaticamente</span>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   DADOS — 85 escolas rurais (extraído de Escolas Rurais.gpkg)
+   Prioritárias: 3 ribeirinhas do Lago Puraquequara (IDs 3,15,22)
+   ============================================================ */
+const ESCOLAS = [
+  {id:1,nome:"E.M. Ebenezer",endereco:"Rio Tarumazinho - Rio Negro",bairro:"Rio Negro",cep:"69049-992",modalidade:"Ensino Fundamental",alunos:65,lat:-2.993924,lng:-60.186399,local:"Ribeirinha",prioritaria:false},
+  {id:2,nome:"E.M. Estrela Da Manha",endereco:"Rio Negro",bairro:"Rio Negro",cep:"69001-019",modalidade:"Ensino Fundamental",alunos:88,lat:-2.641475,lng:-60.656243,local:"Ribeirinha",prioritaria:false},
+  {id:3,nome:"E.M. Francisco Coelho",endereco:"Lago Puraquequara S Francisco",bairro:"Rio Amazonas",cep:"69086-000",modalidade:"Ensino Fundamental",alunos:27,lat:-3.036347,lng:-59.806481,local:"Ribeirinha",prioritaria:true},
+  {id:4,nome:"E.M. Lago E Silva",endereco:"Rod. Am 010",bairro:"Am-010",cep:"69068-000",modalidade:"Ensino Fundamental",alunos:160,lat:-2.942337,lng:-60.011564,local:"Rodoviária",prioritaria:false},
+  {id:5,nome:"E.M. Luiz Jorge Da Silva",endereco:"Rio Negro - Anavilhanas",bairro:"Rio Negro",cep:"69001-019",modalidade:"Ensino Fundamental",alunos:38,lat:-2.929914,lng:-60.466709,local:"Ribeirinha",prioritaria:false},
+  {id:6,nome:"E.M. Manoel Adriano",endereco:"Rod. Am 010",bairro:"Am-010",cep:"69083-010",modalidade:"Ensino Fundamental",alunos:100,lat:-2.802817,lng:-59.881754,local:"Rodoviária",prioritaria:false},
+  {id:7,nome:"E.M. Mario Palmerio",endereco:"Igarape Do Chita",bairro:"Rio Negro",cep:"69001-019",modalidade:"Ensino Fundamental",alunos:51,lat:-2.896685,lng:-60.454347,local:"Ribeirinha",prioritaria:false},
+  {id:8,nome:"E.M. Manuel Da Silva Bahia",endereco:"Parana De Anavilhana",bairro:"Rio Negro",cep:"69001-019",modalidade:"Ensino Fundamental",alunos:46,lat:-2.886194,lng:-60.476765,local:"Ribeirinha",prioritaria:false},
+  {id:9,nome:"E.M. Monte Sinai",endereco:"Baixo Rio Preto Da Eva",bairro:"Rio Amazonas",cep:"69001-009",modalidade:"Ensino Fundamental",alunos:148,lat:-3.078314,lng:-59.331836,local:"Ribeirinha",prioritaria:false},
+  {id:10,nome:"E.M. Luis Freire De Oliveira",endereco:"Rod. Br-174",bairro:"Br-174",cep:"69068-000",modalidade:"Ensino Fundamental",alunos:129,lat:-2.821443,lng:-60.035901,local:"Rodoviária",prioritaria:false},
+  {id:11,nome:"E.M. Elizabeth Siqueira Ferreira",endereco:"Costa Do Jatuarana",bairro:"Rio Amazonas",cep:"69001-009",modalidade:"Ensino Fundamental",alunos:69,lat:-3.051435,lng:-59.678063,local:"Ribeirinha",prioritaria:false},
+  {id:12,nome:"E.M. Nossa Senhora Do Carmo",endereco:"Parana Da Eva",bairro:"Rio Amazonas",cep:"69001-009",modalidade:"Ensino Fundamental",alunos:47,lat:-3.144843,lng:-59.345765,local:"Ribeirinha",prioritaria:false},
+  {id:13,nome:"E.M. Padre Calleri",endereco:"Rod. Br 174",bairro:"Br-174",cep:"69068-000",modalidade:"Ensino Fundamental",alunos:107,lat:-2.866697,lng:-60.034454,local:"Rodoviária",prioritaria:false},
+  {id:14,nome:"E.M. Joana Vieira",endereco:"Rod. Am 010",bairro:"Am-010",cep:"69068-000",modalidade:"Ensino Fundamental",alunos:103,lat:-2.905968,lng:-59.887077,local:"Rodoviária",prioritaria:false},
+  {id:15,nome:"E.M. Santa Luzia",endereco:"Rio Amazonas",bairro:"Puraquequara",cep:"69001-009",modalidade:"Ensino Fundamental",alunos:40,lat:-3.036386,lng:-59.824455,local:"Ribeirinha",prioritaria:true},
+  {id:16,nome:"E.M. Santa Rosa",endereco:"Costa Do Tabocal",bairro:"Rio Amazonas",cep:"69001-009",modalidade:"Ensino Fundamental",alunos:22,lat:-3.14173,lng:-59.402163,local:"Ribeirinha",prioritaria:false},
+  {id:17,nome:"E.M. Paula Aliomar Beltrao",endereco:"Taruma Acu",bairro:"Rio Negro",cep:"69022-488",modalidade:"Ensino Fundamental",alunos:112,lat:-2.925107,lng:-60.109576,local:"Ribeirinha",prioritaria:false},
+  {id:18,nome:"E.M. Sao Francisco",endereco:"Costa Do Tabocal",bairro:"Rio Amazonas",cep:"69001-009",modalidade:"Ensino Fundamental",alunos:69,lat:-3.087698,lng:-59.569255,local:"Ribeirinha",prioritaria:false},
+  {id:19,nome:"E.M. Sao Francisco Das Chagas",endereco:"Costa Do Arara",bairro:"Rio Negro",cep:"69001-019",modalidade:"Ensino Fundamental",alunos:48,lat:-3.012425,lng:-60.399172,local:"Ribeirinha",prioritaria:false},
+  {id:20,nome:"E.M. Sao Jorge",endereco:"Lago Do Aruma",bairro:"Rio Amazonas",cep:"69001-009",modalidade:"Ensino Fundamental",alunos:27,lat:-3.122916,lng:-59.217678,local:"Ribeirinha",prioritaria:false},
+  {id:21,nome:"E.M. Sao Jose",endereco:"Rod. Am 010",bairro:"Am-010",cep:"69048-000",modalidade:"Ensino Fundamental",alunos:173,lat:-2.733589,lng:-59.886833,local:"Rodoviária",prioritaria:false},
+  {id:22,nome:"E.M. Sao Luiz De Gonzaga",endereco:"Lago Puraquequara - Igarape Da Floresta",bairro:"Puraquequara",cep:"69001-009",modalidade:"Ensino Fundamental",alunos:45,lat:-2.981339,lng:-59.835194,local:"Ribeirinha",prioritaria:true},
+  {id:23,nome:"E.M. Sao Sebastiao Ii",endereco:"Sao Sebastiao",bairro:"Rio Negro",cep:"69049-992",modalidade:"Ensino Fundamental",alunos:68,lat:-2.970246,lng:-60.199123,local:"Ribeirinha",prioritaria:false},
+  {id:24,nome:"E.I.M. Kunyata Putira",endereco:"Parana Do Samauma",bairro:"Rio Negro",cep:"69001-019",modalidade:"Ensino Fundamental",alunos:14,lat:-2.774922,lng:-60.569252,local:"Ribeirinha",prioritaria:false},
+  {id:25,nome:"E.M. Vista Alegre",endereco:"Parana Da Eva",bairro:"Rio Amazonas",cep:"69001-009",modalidade:"Ensino Fundamental",alunos:17,lat:-3.151903,lng:-59.257617,local:"Ribeirinha",prioritaria:false},
+  {id:26,nome:"E.M. Ouvidor Sampaio",endereco:"Rod. Am 010",bairro:"Am-010",cep:"69048-000",modalidade:"Ensino Fundamental",alunos:185,lat:-2.814472,lng:-59.935381,local:"Rodoviária",prioritaria:false},
+  {id:27,nome:"E.M. Ester",endereco:"Rod. Br 174",bairro:"Br-174",cep:"69035-000",modalidade:"Ensino Fundamental",alunos:220,lat:-2.907375,lng:-60.038017,local:"Rodoviária",prioritaria:false},
+  {id:28,nome:"E.M. Manoel Chagas",endereco:"Costa Do Tabocal - Bonsucesso",bairro:"Rio Amazonas",cep:"69001-009",modalidade:"Ensino Fundamental",alunos:48,lat:-3.131275,lng:-59.432504,local:"Ribeirinha",prioritaria:false},
+  {id:29,nome:"E.M. Sao Jose Do Parana Da Eva",endereco:"Parana Da Eva",bairro:"Rio Amazonas",cep:"69001-009",modalidade:"Ensino Fundamental",alunos:70,lat:-3.173757,lng:-59.187198,local:"Ribeirinha",prioritaria:false},
+  {id:30,nome:"E.M. Sao Lazaro",endereco:"Costa Do Jatuarana",bairro:"Rio Amazonas",cep:"69001-009",modalidade:"Ensino Fundamental",alunos:19,lat:-3.05759,lng:-59.662445,local:"Ribeirinha",prioritaria:false},
+  {id:31,nome:"E.M. Sao Pedro",endereco:"Costa Do Tabocal",bairro:"Rio Amazonas",cep:"69001-009",modalidade:"Ensino Fundamental",alunos:30,lat:-3.120814,lng:-59.471004,local:"Ribeirinha",prioritaria:false},
+  {id:32,nome:"E.M. Canaa Ii",endereco:"Comunidade Juliao",bairro:"Rio Negro",cep:"69049-992",modalidade:"Ensino Fundamental",alunos:61,lat:-3.00727,lng:-60.205977,local:"Ribeirinha",prioritaria:false},
+  {id:33,nome:"E.M. Paulo Cesar Nonato",endereco:"Igarape Tiu - Nova Esperanca",bairro:"Rio Negro",cep:"69022-488",modalidade:"Ensino Fundamental",alunos:138,lat:-2.951563,lng:-60.136227,local:"Ribeirinha",prioritaria:false},
+  {id:34,nome:"E.M. Sao Joao",endereco:"Lago Do Tupe",bairro:"Rio Negro",cep:"69001-019",modalidade:"Ensino Fundamental",alunos:74,lat:-3.045992,lng:-60.255973,local:"Ribeirinha",prioritaria:false},
+  {id:35,nome:"E.M. Sao Jose Do Taruma",endereco:"N.Sra. Do Livramento",bairro:"Rio Negro",cep:"69049-992",modalidade:"Ensino Fundamental",alunos:150,lat:-3.027043,lng:-60.179371,local:"Ribeirinha",prioritaria:false},
+  {id:36,nome:"E.M. Jose Sobreira Do Nascimento",endereco:"N. Sra. De Fatima",bairro:"Rio Negro",cep:"69049-992",modalidade:"Ensino Fundamental",alunos:276,lat:-3.020787,lng:-60.164869,local:"Ribeirinha",prioritaria:false},
+  {id:37,nome:"E.M. Santo Antonio",endereco:"Comunidade Monte Sinai",bairro:"Rio Negro",cep:"69001-019",modalidade:"Ensino Fundamental",alunos:49,lat:-2.734922,lng:-60.572659,local:"Ribeirinha",prioritaria:false},
+  {id:38,nome:"E.M. Sao Sebastiao I",endereco:"Foz Do Rio Cuieiras",bairro:"Rio Negro",cep:"69049-993",modalidade:"Ensino Fundamental",alunos:92,lat:-2.816305,lng:-60.485766,local:"Ribeirinha",prioritaria:false},
+  {id:39,nome:"E.M. Maria Isabel Melgueiro",endereco:"Rod. Br 174",bairro:"Br-174",cep:"69068-000",modalidade:"Ensino Fundamental",alunos:183,lat:-2.854775,lng:-60.167551,local:"Rodoviária",prioritaria:false},
+  {id:40,nome:"E.M. Neuza Dos Santos Ribeiro",endereco:"Rod. Br 174",bairro:"Br-174",cep:"69068-000",modalidade:"Ensino Fundamental",alunos:308,lat:-2.777864,lng:-60.13295,local:"Rodoviária",prioritaria:false},
+  {id:41,nome:"E.M. Pedro Dias Silva",endereco:"Rod. Br 174",bairro:"Br-174",cep:"69068-000",modalidade:"Ensino Fundamental",alunos:20,lat:-2.943681,lng:-60.167663,local:"Rodoviária",prioritaria:false},
+  {id:42,nome:"E.M. Ruth Leia Oliveira",endereco:"Rod. Br 174",bairro:"Br-174",cep:"69000-000",modalidade:"Ensino Fundamental",alunos:46,lat:-2.830372,lng:-60.11476,local:"Rodoviária",prioritaria:false},
+  {id:43,nome:"E.M. Oscarina Falcao",endereco:"Rod. Br 174",bairro:"Br-174",cep:"69000-000",modalidade:"Ensino Fundamental",alunos:45,lat:-2.874983,lng:-60.131082,local:"Rodoviária",prioritaria:false},
+  {id:44,nome:"E.M. Sao Salvador",endereco:"Baixo Rio Preto Da Eva",bairro:"Rio Amazonas",cep:"69001-009",modalidade:"Ensino Fundamental",alunos:30,lat:-3.118318,lng:-59.356954,local:"Ribeirinha",prioritaria:false},
+  {id:45,nome:"E.M. Raul Pompeia",endereco:"Comunidade Novo Paraiso",bairro:"Rio Negro",cep:"69001-019",modalidade:"Ensino Fundamental",alunos:22,lat:-2.899647,lng:-60.226677,local:"Ribeirinha",prioritaria:false},
+  {id:46,nome:"E.M. Nossa Senhora De Nazare",endereco:"Costa Do Tabocal",bairro:"Rio Amazonas",cep:"69001-009",modalidade:"Ensino Fundamental",alunos:112,lat:-3.111524,lng:-59.522556,local:"Ribeirinha",prioritaria:false},
+  {id:47,nome:"E.M. Ivan Junior Saraiva",endereco:"Rod. Br 174",bairro:"Br-174",cep:"69048-000",modalidade:"Ensino Fundamental",alunos:83,lat:-2.85416,lng:-60.090515,local:"Rodoviária",prioritaria:false},
+  {id:48,nome:"E.M. Luis Alberto Castelo",endereco:"Comunidade Caramuri",bairro:"Rio Amazonas",cep:"69001-009",modalidade:"Ensino Fundamental",alunos:14,lat:-3.069079,lng:-59.387793,local:"Ribeirinha",prioritaria:false},
+  {id:49,nome:"Esc. Indig. Kanata T-Ykua",endereco:"Indigena Tres Unidos",bairro:"Rio Negro",cep:"69049-993",modalidade:"Ensino Fundamental",alunos:20,lat:-2.821009,lng:-60.501632,local:"Ribeirinha",prioritaria:false},
+  {id:50,nome:"Esc. Indig. Puranga Pisasu",endereco:"Rio Cuieiras",bairro:"Rio Negro",cep:"69049-993",modalidade:"Ensino Fundamental",alunos:62,lat:-2.74719,lng:-60.431203,local:"Ribeirinha",prioritaria:false},
+  {id:51,nome:"Esc. Indig. Aru Waimi",endereco:"Terra Preta",bairro:"Rio Negro",cep:"69049-993",modalidade:"Ensino Fundamental",alunos:32,lat:-2.918514,lng:-60.467044,local:"Ribeirinha",prioritaria:false},
+  {id:52,nome:"E.M. Epitacio Nunes Da Fonseca",endereco:"Rod. Br 174",bairro:"Br-174",cep:"69023-165",modalidade:"Ensino Fundamental",alunos:39,lat:-2.733348,lng:-60.199986,local:"Rodoviária",prioritaria:false},
+  {id:53,nome:"E.M. Francisco Orellana",endereco:"Igarape Do Cemiterio",bairro:"Rio Amazonas",cep:"69001-009",modalidade:"Ensino Fundamental",alunos:42,lat:-3.116879,lng:-59.322655,local:"Ribeirinha",prioritaria:false},
+  {id:54,nome:"E.M. Figueiredo Pimentel",endereco:"Igarape Do Mulato",bairro:"Rio Negro",cep:"69001-019",modalidade:"Ensino Fundamental",alunos:32,lat:-2.652857,lng:-60.609157,local:"Ribeirinha",prioritaria:false},
+  {id:55,nome:"E.M. Silvio Romero",endereco:"Rio Negro",bairro:"Rio Negro",cep:"69001-019",modalidade:"Ensino Fundamental",alunos:42,lat:-3.02722,lng:-60.375201,local:"Ribeirinha",prioritaria:false},
+  {id:56,nome:"E.M. Raimunda Brasil",endereco:"Parana Do Acariquara",bairro:"Rio Negro",cep:"69001-019",modalidade:"Ensino Fundamental",alunos:91,lat:-2.555895,lng:-60.761688,local:"Ribeirinha",prioritaria:false},
+  {id:57,nome:"E.M. Jose Euclides Azevedo",endereco:"Com Tresgalhos",bairro:"Br-174",cep:"69023-165",modalidade:"Ensino Fundamental",alunos:52,lat:-2.914466,lng:-60.199478,local:"Rodoviária",prioritaria:false},
+  {id:58,nome:"E.M. Zilda Iracema Nunes",endereco:"Rod. Br 174",bairro:"Br-174",cep:"69068-000",modalidade:"Ensino Fundamental",alunos:78,lat:-2.430028,lng:-60.243166,local:"Rodoviária",prioritaria:false},
+  {id:59,nome:"E.M. Dian Kelly Mota",endereco:"Comunidade Abelha",bairro:"Rio Negro",cep:"69049-992",modalidade:"Ensino Fundamental",alunos:89,lat:-3.015835,lng:-60.156826,local:"Ribeirinha",prioritaria:false},
+  {id:60,nome:"E.M. Carlos Antonio Cardoso",endereco:"Rod. Br 174",bairro:"Br-174",cep:"69048-990",modalidade:"Ensino Fundamental",alunos:167,lat:-2.617109,lng:-60.038221,local:"Rodoviária",prioritaria:false},
+  {id:61,nome:"E.M. Sao Judas Tadeu",endereco:"Rod. Br 174",bairro:"Br-174",cep:"69098-000",modalidade:"Ensino Fundamental",alunos:470,lat:-2.875294,lng:-60.035587,local:"Rodoviária",prioritaria:false},
+  {id:62,nome:"E.M. Rui Barbosa",endereco:"Nova Canaa",bairro:"Rio Negro",cep:"69085-010",modalidade:"Ensino Fundamental",alunos:28,lat:-2.789433,lng:-60.451157,local:"Ribeirinha",prioritaria:false},
+  {id:63,nome:"E.M. Santo Antonio",endereco:"Rod. Am 010",bairro:"Am-010",cep:"69048-000",modalidade:"Ensino Fundamental",alunos:75,lat:-2.758874,lng:-59.93717,local:"Rodoviária",prioritaria:false},
+  {id:64,nome:"E.M. Abilio Alencar",endereco:"Rod. Am 010",bairro:"Am-010",cep:"69059-070",modalidade:"Ensino Fundamental",alunos:526,lat:-2.859244,lng:-59.94089,local:"Rodoviária",prioritaria:false},
+  {id:65,nome:"E.M. Arthur Virgilio Filho",endereco:"Rod. Br-174",bairro:"Br-174",cep:"69048-992",modalidade:"Ensino Fundamental",alunos:122,lat:-2.870429,lng:-60.094798,local:"Rodoviária",prioritaria:false},
+  {id:66,nome:"E.M. Bom Jesus",endereco:"Lago Do Mipindiau",bairro:"Rio Negro",cep:"69001-019",modalidade:"Ensino Fundamental",alunos:72,lat:-2.669026,lng:-60.608895,local:"Ribeirinha",prioritaria:false},
+  {id:67,nome:"E.M. Canaa I",endereco:"Rio Amazonas",bairro:"Rio Amazonas",cep:"69001-009",modalidade:"Ensino Fundamental",alunos:48,lat:-3.14684,lng:-59.302474,local:"Ribeirinha",prioritaria:false},
+  {id:68,nome:"E.M. Carlos Santos",endereco:"Rod. Am 010",bairro:"Am-010",cep:"69068-000",modalidade:"Ensino Fundamental",alunos:235,lat:-2.914999,lng:-59.994002,local:"Rodoviária",prioritaria:false},
+  {id:69,nome:"E.M. Francisco Diogo De Melo",endereco:"Nova Esperanca",bairro:"Rio Negro",cep:"69001-019",modalidade:"Ensino Fundamental",alunos:41,lat:-2.519099,lng:-60.780653,local:"Ribeirinha",prioritaria:false},
+  {id:70,nome:"E.M. Divino Espirito Santo",endereco:"Igarape Do Jaraqui",bairro:"Rio Negro",cep:"69001-019",modalidade:"Ensino Fundamental",alunos:99,lat:-2.992842,lng:-60.408222,local:"Ribeirinha",prioritaria:false},
+  {id:71,nome:"E.M. Monte Horebe",endereco:"Est. Do Puraquequara",bairro:"Puraquequara",cep:"69009-000",modalidade:"Ensino Fundamental",alunos:258,lat:-3.060132,lng:-59.877347,local:"Rodoviária",prioritaria:false},
+  {id:72,nome:"E.M. Jose Marques De Almeida",endereco:"Rod. Am 010",bairro:"Lago Azul",cep:"69019-400",modalidade:"Ensino Fundamental",alunos:98,lat:-2.954614,lng:-59.984078,local:"Rodoviária",prioritaria:false},
+  {id:73,nome:"E.M. Maria Leide Amorim",endereco:"Rod. Br 174",bairro:"Lago Azul",cep:"69048-990",modalidade:"Ensino Fundamental",alunos:698,lat:-2.947655,lng:-60.026199,local:"Rodoviária",prioritaria:false},
+  {id:74,nome:"E.M. Chico Mendes",endereco:"Rod. Am10, Km 19",bairro:"Lago Azul",cep:"69019-440",modalidade:"Ensino Fundamental",alunos:464,lat:-2.954878,lng:-60.02616,local:"Rodoviária",prioritaria:false},
+  {id:75,nome:"E.M. Joao Paulo Ii",endereco:"Est. Do Puraquequara",bairro:"Distrito Industrial Ii",cep:"69089-000",modalidade:"Ensino Fundamental",alunos:425,lat:-3.047526,lng:-59.893616,local:"Rodoviária",prioritaria:false},
+  {id:76,nome:"E.M. Emanuel Rebelo Da Cunha",endereco:"Est. Do Brasileirinho",bairro:"Distrito Industrial Ii",cep:"69088-000",modalidade:"Ensino Fundamental",alunos:358,lat:-3.014578,lng:-59.857517,local:"Rodoviária",prioritaria:false},
+  {id:77,nome:"E.M. Solange Nascimento",endereco:"Rod. Br 174",bairro:"Tarumã-Açú",cep:"69048-990",modalidade:"Ensino Fundamental",alunos:543,lat:-2.959688,lng:-60.032637,local:"Rodoviária",prioritaria:false},
+  {id:78,nome:"E.M. Tereza Cordovil Guimaraes",endereco:"Vivenda Verde",bairro:"Tarumã-Açú",cep:"69005-330",modalidade:"Ensino Fundamental",alunos:399,lat:-2.992851,lng:-60.077288,local:"Rodoviária",prioritaria:false},
+  {id:79,nome:"Cmei Ismail Aziz",endereco:"Rod. Br 174",bairro:"Tarumã-Açú",cep:"69035-000",modalidade:"Educação Infantil",alunos:404,lat:-2.965879,lng:-60.025755,local:"Rodoviária",prioritaria:false},
+  {id:80,nome:"E.M. Pedro Diogo Roque",endereco:"Avenida Da Floresta",bairro:"Tarumã-Açú",cep:"69024-000",modalidade:"Ensino Fundamental",alunos:187,lat:-2.983793,lng:-60.061371,local:"Rodoviária",prioritaria:false},
+  {id:81,nome:"E.M. Paulo Freire",endereco:"Agrovila Amazonino Mendes",bairro:"Rio Negro",cep:"69049-992",modalidade:"Ensino Fundamental",alunos:73,lat:-2.968743,lng:-60.210493,local:"Ribeirinha",prioritaria:false},
+  {id:82,nome:"Escola Rainha Dos Apostolos",endereco:"Rod. Br 174",bairro:"Br-174",cep:"69089-000",modalidade:"Ensino Fundamental",alunos:417,lat:-2.782031,lng:-60.037222,local:"Rodoviária",prioritaria:false},
+  {id:83,nome:"E.M. Francisca Campos Correa",endereco:"Ramal Do Cetur",bairro:"Tarumã",cep:"69049-690",modalidade:"Ensino Fundamental",alunos:485,lat:-3.013273,lng:-60.076928,local:"Rodoviária",prioritaria:false},
+  {id:84,nome:"E.M. Santa Rosa Ii",endereco:"Rua Jacururu",bairro:"Tarumã-Açú",cep:"69022-580",modalidade:"Ensino Fundamental",alunos:716,lat:-2.987705,lng:-60.072135,local:"Rodoviária",prioritaria:false},
+  {id:85,nome:"Creche Municipal Rosa Almeida",endereco:"Estrada Cláudio Mesquita, Km 08",bairro:"Br-174",cep:"69000000",modalidade:"Creche",alunos:0,lat:-2.892818,lng:-60.073073,local:"Rodoviária",prioritaria:false},
+];
+
+/* ============================================================
+   ESTADO GLOBAL
+   ============================================================ */
+const STATE = {
+  base: 'satellite',
+  baseLayers: {},
+  features: [],           // FEIÇÕES COLETADAS unificadas: {id,type,desc,latlng|latlngs,meta}
+  kmlLayers: [],          // camadas KML importadas {id,name,layer}
+  mode: null,             // 'point' | 'line' | 'polygon' | null
+  measure: { points: [], line: null, polygon: null, markers: [], preview: null },
+  tracking: false,
+  watchId: null,
+  userMarker: null,
+  userAccuracy: null,
+  markers: {},            // id da feição -> Leaflet layer (mapa de renderização)
+  attrTab: 'all',         // aba ativa da tabela de atributos
+  schoolObs: {},          // observações de campo das escolas (id -> texto)
+  schoolMarkers: {},      // id da escola -> Leaflet marker (para re-renderizar)
+  prioritySchools: {},    // id da escola -> true (prioritárias selecionáveis)
+};
+
+/* ============================================================
+   HELPERS DE ÍCONE (SVG de traço fino, via sprite <use>)
+   ============================================================ */
+function iconSvg(sym, color, cls) {
+  const c = color ? ` style="color:${color}"` : '';
+  const k = cls ? ' ' + cls : ' sm';
+  return `<svg class="icon${k}"${c}><use href="#${sym}"/></svg>`;
+}
+function iconX() { return iconSvg('i-x'); }
+
+/* ============================================================
+   INICIALIZAÇÃO DO MAPA
+   ============================================================ */
+const map = L.map('map', {
+  center: [-3.02, -59.83],   // Lago Puraquequara
+  zoom: 12,
+  zoomControl: false,
+  attributionControl: true,
+});
+// Zoom control reposicionado para o canto inferior direito (livre de colisões)
+L.control.zoom({ position: 'bottomright' }).addTo(map);
+// Attribution movida para o canto inferior esquerdo para nao colidir com o zoom
+map.attributionControl.setPosition('bottomleft');
+
+// Bases
+STATE.baseLayers.satellite = L.tileLayer(
+  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  { attribution: 'Tiles © Esri', maxZoom: 19, maxNativeZoom: 18 }
+).addTo(map);
+
+STATE.baseLayers.dark = L.tileLayer(
+  'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+  { attribution: '© CARTO © OpenStreetMap', maxZoom: 20, subdomains: 'abcd' }
+);
+
+// Overlay de rótulos (estradas/nomes) sobre o satélite
+const labelsOverlay = L.tileLayer(
+  'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+  { maxZoom: 19, opacity: 0.9 }
+);
+
+/* ============================================================
+   ÍCONES CUSTOMIZADOS
+   ============================================================ */
+const schoolPriorityIcon = L.divIcon({
+  className: "",
+  html: '<div class="school-priority-marker"></div>',
+  iconSize: [28, 28],
+  iconAnchor: [14, 14]
+});
+const schoolNormalIcon = L.divIcon({
+  className: "",
+  html: '<div class="school-normal-marker"></div>',
+  iconSize: [16, 16],
+  iconAnchor: [8, 8]
+});
+const collectedPointIcon = L.divIcon({
+  className: "",
+  html: '<div class="collected-point-marker"></div>',
+  iconSize: [18, 18],
+  iconAnchor: [9, 9]
+});
+const userSonarIcon = L.divIcon({
+  className: "",
+  html: '<div class="user-sonar-marker"></div>',
+  iconSize: [28, 28],
+  iconAnchor: [14, 14]
+});
+
+/* ============================================================
+   CAMADAS
+   ============================================================ */
+const escolasLayer = L.layerGroup().addTo(map);
+const escolasPrioritariasLayer = L.layerGroup().addTo(map);
+const collectedLayer = L.layerGroup().addTo(map);
+const kmlOverlay = L.layerGroup().addTo(map);
+
+// definição das camadas p/ o painel
+const LAYERS = [
+  { id: 'prioritarias', name: 'Escolas Prioritárias', color: '#ff8426', layer: escolasPrioritariasLayer, on: true },
+  { id: 'escolas', name: 'Escolas Rurais (85)', color: '#c2410c', layer: escolasLayer, on: true },
+  { id: 'collected', name: 'Pontos Coletados', color: '#35d07f', layer: collectedLayer, on: true },
+  { id: 'labels', name: 'Rótulos / Nomes', color: '#f5f5f5', layer: labelsOverlay, on: false },
+];
+
+/* ============================================================
+   POPUPS EDITÁVEIS (com link Google Maps)
+   ============================================================ */
+function gmapsUrl(lat, lng) {
+  return `https://www.google.com/maps?q=${lat},${lng}`;
+}
+// Popup de ESCOLA (descrição = observação de campo editável + persistente)
+function criarPopupEscola(e) {
+  const tag = isPriority(e.id)
+    ? '<span class="popup-tag priority">Prioritária</span>'
+    : (e.local === 'Ribeirinha'
+        ? '<span class="popup-tag ribeirinha">Ribeirinha</span>'
+        : '<span class="popup-tag rodoviaria">Rodoviária</span>');
+  const obs = getSchoolObs(e.id);
+  const prio = isPriority(e.id);
+  const prioBtn = prio
+    ? `<button class="popup-btn save" data-school-prio="${e.id}">${iconSvg('i-star')} Prioritária</button>`
+    : `<button class="popup-btn" data-school-prio="${e.id}">${iconSvg('i-star')} Tornar prioritária</button>`;
+  return `<div class="popup-card">
+    ${tag}
+    <div class="popup-name">${e.nome}</div>
+    <div class="popup-row"><b>Bairro:</b> ${e.bairro}</div>
+    <div class="popup-row"><b>Endereço:</b> ${e.endereco}</div>
+    <div class="popup-row"><b>Modalidade:</b> ${e.modalidade}</div>
+    <div class="popup-row"><b>Alunos:</b> <span style="color:var(--amber-light);font-weight:700">${e.alunos}</span> · <b>Acesso:</b> ${e.local}</div>
+    <div class="popup-coords">${e.lat.toFixed(5)}, ${e.lng.toFixed(5)} · CEP ${e.cep}</div>
+    <div class="popup-desc">
+      <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px">Observação de campo</label>
+      <textarea data-school-obs="${e.id}" placeholder="Registre observações da visita...">${obs}</textarea>
+    </div>
+    <div class="popup-actions">
+      ${prioBtn}
+      <a class="popup-btn gmaps" href="${gmapsUrl(e.lat, e.lng)}" target="_blank" rel="noopener">${iconSvg('i-external')} Google Maps</a>
+    </div>
+  </div>`;
+}
+// Popup de FEIÇÃO COLETADA (ponto/linha/polígono) — descrição editável
+function criarPopupFeature(f) {
+  const typeLabel = { point: 'Ponto', line: 'Linha', polygon: 'Polígono' }[f.type] || f.type;
+  const typeColor = { point: 'var(--green)', line: 'var(--blue)', polygon: 'var(--amber-light)' }[f.type];
+  let medida = '';
+  if (f.type === 'point') medida = `${f.latlng[0].toFixed(6)}, ${f.latlng[1].toFixed(6)}`;
+  else if (f.type === 'line') medida = `Comprimento: ${formatDist(f.meta.length)}`;
+  else if (f.type === 'polygon') medida = `Área: ${formatArea(f.meta.area)} · Perím: ${formatDist(f.meta.perimeter)}`;
+  return `<div class="popup-card">
+    <span class="popup-tag" style="background:rgba(${f.type==='point'?'53,208,127':f.type==='line'?'56,189,248':'255,132,38'},0.15);color:${typeColor};border:1px solid rgba(${f.type==='point'?'53,208,127':f.type==='line'?'56,189,248':'255,132,38'},0.4)">${typeLabel} Coletado</span>
+    <div class="popup-desc">
+      <textarea data-feat-desc="${f.id}" placeholder="Descrição do ${typeLabel.toLowerCase()}...">${f.desc || ''}</textarea>
+    </div>
+    <div class="popup-coords">${medida}</div>
+    <div class="popup-actions">
+      <a class="popup-btn gmaps" href="${featCenterUrl(f)}" target="_blank" rel="noopener">${iconSvg('i-external')} Google Maps</a>
+      <button class="popup-btn save" data-feat-save="${f.id}">${iconSvg('i-check')} Salvar</button>
+      <button class="popup-btn del" data-feat-del="${f.id}">${iconSvg('i-x')} Excluir</button>
+    </div>
+    <div class="popup-hint">Editar descrição e clicar em Salvar</div>
+  </div>`;
+}
+// Centro de uma feição para o link do Google Maps
+function featCenter(f) {
+  if (f.type === 'point') return f.latlng;
+  if (f.type === 'line') {
+    const mid = f.latlngs[Math.floor(f.latlngs.length / 2)];
+    return mid;
+  }
+  // polígono: centroide aproximado (média)
+  let lat = 0, lng = 0;
+  f.latlngs.forEach(p => { lat += p[0]; lng += p[1]; });
+  return [lat / f.latlngs.length, lng / f.latlngs.length];
+}
+function featCenterUrl(f) {
+  const c = featCenter(f);
+  return gmapsUrl(c[0], c[1]);
+}
+
+/* ============================================================
+   PERSISTÊNCIA (localStorage)
+   ============================================================ */
+const LS_KEY = 'puraquequara_webgis_v1';
+function saveState() {
+  try {
+    const data = {
+      features: STATE.features.map(f => ({
+        id: f.id, type: f.type, desc: f.desc || '',
+        latlng: f.latlng, latlngs: f.latlngs, meta: f.meta
+      })),
+      schoolObs: STATE.schoolObs || {},
+      prioritySchools: STATE.prioritySchools || {}
+    };
+    localStorage.setItem(LS_KEY, JSON.stringify(data));
+  } catch (e) { console.warn('Falha ao salvar:', e); }
+}
+function loadState() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    STATE.features = data.features || [];
+    STATE.schoolObs = data.schoolObs || {};
+    STATE.prioritySchools = data.prioritySchools || {};
+  } catch (e) { console.warn('Falha ao carregar:', e); }
+}
+// Seed inicial: se nunca houve seleção, usa as 3 prioritárias originais
+function seedPriority() {
+  if (Object.keys(STATE.prioritySchools).length === 0 && !localStorage.getItem(LS_KEY)) {
+    ESCOLAS.filter(e => e.prioritaria).forEach(e => STATE.prioritySchools[e.id] = true);
+  }
+}
+function isPriority(id) { return !!STATE.prioritySchools[id]; }
+function togglePriority(id) {
+  if (STATE.prioritySchools[id]) delete STATE.prioritySchools[id];
+  else STATE.prioritySchools[id] = true;
+  saveState();
+}
+function getSchoolObs(id) { return (STATE.schoolObs && STATE.schoolObs[id]) || ''; }
+function setSchoolObs(id, val) {
+  if (!STATE.schoolObs) STATE.schoolObs = {};
+  STATE.schoolObs[id] = val;
+  saveState();
+}
+
+/* ============================================================
+   POPULAR ESCOLAS NO MAPA
+   ============================================================ */
+// Carrega estado persistido (prioridades, obs, feições) ANTES de renderizar as escolas
+loadState();
+seedPriority();
+ESCOLAS.forEach(escola => {
+  const icon = isPriority(escola.id) ? schoolPriorityIcon : schoolNormalIcon;
+  const marker = L.marker([escola.lat, escola.lng], { icon }).bindPopup(criarPopupEscola(escola));
+  STATE.schoolMarkers[escola.id] = marker;
+  if (isPriority(escola.id)) marker.addTo(escolasPrioritariasLayer);
+  else marker.addTo(escolasLayer);
+});
+
+// Re-renderiza o marcador de uma escola ao alternar prioridade
+function refreshSchoolMarker(id) {
+  const escola = ESCOLAS.find(e => e.id === id);
+  if (!escola) return;
+  const old = STATE.schoolMarkers[id];
+  // remove das camadas onde estiver
+  if (escolasLayer.hasLayer(old)) escolasLayer.removeLayer(old);
+  if (escolasPrioritariasLayer.hasLayer(old)) escolasPrioritariasLayer.removeLayer(old);
+  // recria com ícone e camada corretos
+  const icon = isPriority(id) ? schoolPriorityIcon : schoolNormalIcon;
+  const marker = L.marker([escola.lat, escola.lng], { icon }).bindPopup(criarPopupEscola(escola));
+  STATE.schoolMarkers[id] = marker;
+  if (isPriority(id)) marker.addTo(escolasPrioritariasLayer);
+  else marker.addTo(escolasLayer);
+}
+
+/* ============================================================
+   PAINEL — ESCOLAS PRIORITÁRIAS (selecionável)
+   ============================================================ */
+const priorityList = document.getElementById('priority-list');
+function renderPriorityList() {
+  priorityList.innerHTML = '';
+  const prios = ESCOLAS.filter(e => isPriority(e.id));
+  if (prios.length === 0) {
+    priorityList.innerHTML = '<div class="collected-empty">Nenhuma escola prioritária.<br>Selecione abaixo.</div>';
+  } else {
+    prios.forEach(e => {
+      const div = document.createElement('div');
+      div.className = 'priority-school';
+      div.innerHTML = `
+        <div class="priority-dot"></div>
+        <div class="priority-info">
+          <div class="priority-name">${e.nome}</div>
+          <div class="priority-meta">${e.alunos} alunos · ${e.endereco}</div>
+        </div>
+        <span class="ci-del" title="Remover prioridade" data-unprio="${e.id}">${iconSvg('i-x')}</span>`;
+      div.querySelector('.priority-info').onclick = () => {
+        map.flyTo([e.lat, e.lng], 15, { duration: 1.2 });
+        setTimeout(() => { STATE.schoolMarkers[e.id] && STATE.schoolMarkers[e.id].openPopup(); }, 1300);
+      };
+      div.querySelector('[data-unprio]').onclick = (ev) => {
+        ev.stopPropagation();
+        togglePriority(e.id);
+        refreshSchoolMarker(e.id);
+        renderPriorityList();
+        updateIndicators();
+        toast('Prioridade removida');
+      };
+      priorityList.appendChild(div);
+    });
+  }
+}
+renderPriorityList();
+
+// Seletor de escolas (busca + lista completa para marcar prioritárias)
+function renderPriorityPicker() {
+  const box = document.getElementById('priority-picker');
+  const q = document.getElementById('priority-search').value.trim().toLowerCase();
+  const list = ESCOLAS
+    .filter(e => !isPriority(e.id))
+    .filter(e => !q || (e.nome + ' ' + e.bairro + ' ' + e.endereco).toLowerCase().includes(q))
+    .slice(0, 60);
+  if (list.length === 0) {
+    box.innerHTML = '<div class="collected-empty">' + (q ? 'Nenhuma escola encontrada.' : 'Todas as escolas já são prioritárias.') + '</div>';
+    return;
+  }
+  box.innerHTML = '';
+  list.forEach(e => {
+    const el = document.createElement('div');
+    el.className = 'collected-item';
+    el.innerHTML = `
+      <span class="ci-name" style="cursor:pointer">${e.nome} <span style="color:var(--text-muted);font-size:10px">· ${e.bairro}</span></span>
+      <span class="attr-act" data-add-prio="${e.id}" title="Tornar prioritária" style="border-color:var(--border-amber);color:var(--amber-light)">${iconSvg('i-star')}</span>`;
+    el.querySelector('.ci-name').onclick = () => {
+      map.flyTo([e.lat, e.lng], 15, { duration: 1 });
+      setTimeout(() => { STATE.schoolMarkers[e.id] && STATE.schoolMarkers[e.id].openPopup(); }, 1100);
+    };
+    el.querySelector('[data-add-prio]').onclick = (ev) => {
+      ev.stopPropagation();
+      togglePriority(e.id);
+      refreshSchoolMarker(e.id);
+      renderPriorityList();
+      renderPriorityPicker();
+      updateIndicators();
+      toast('Escola marcada como prioritária', 'success');
+    };
+    box.appendChild(el);
+  });
+}
+document.getElementById('priority-search').addEventListener('input', renderPriorityPicker);
+renderPriorityPicker();
+
+/* ============================================================
+   PAINEL — CAMADAS
+   ============================================================ */
+const layersList = document.getElementById('layers-list');
+LAYERS.forEach(l => {
+  const row = document.createElement('div');
+  row.className = 'layer-item';
+  row.innerHTML = `
+    <label class="layer-toggle">
+      <input type="checkbox" ${l.on ? 'checked' : ''} data-layer="${l.id}">
+      <span class="layer-slider"></span>
+    </label>
+    <span class="layer-swatch" style="background:${l.color}"></span>
+    <span class="layer-name">${l.name}</span>`;
+  layersList.appendChild(row);
+});
+layersList.querySelectorAll('input[type=checkbox]').forEach(cb => {
+  cb.addEventListener('change', () => {
+    const l = LAYERS.find(x => x.id === cb.dataset.layer);
+    if (cb.checked) { l.layer.addTo(map); l.on = true; }
+    else { map.removeLayer(l.layer); l.on = false; }
+  });
+});
+
+/* ============================================================
+   SELETOR DE BASE
+   ============================================================ */
+document.querySelectorAll('.base-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const base = btn.dataset.base;
+    document.querySelectorAll('.base-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    Object.values(STATE.baseLayers).forEach(bl => map.removeLayer(bl));
+    STATE.baseLayers[base].addTo(map);
+    STATE.base = base;
+    if (base === 'satellite' && LAYERS.find(l => l.id === 'labels').on) {
+      labelsOverlay.addTo(map);
+    }
+    toast(base === 'satellite' ? 'Base satélite ativa' : 'Base escura ativa');
+  });
+});
+
+/* ============================================================
+   FEIÇÕES COLETADAS (ponto/linha/polígono) — modelo unificado
+   ============================================================ */
+function addFeature(type, latlng, latlngs, desc, meta) {
+  const f = { id: 'f' + Date.now() + Math.floor(Math.random() * 1000), type, latlng, latlngs, desc: desc || '', meta: meta || {} };
+  STATE.features.push(f);
+  renderFeature(f);
+  saveState();
+  updateIndicators();
+  return f;
+}
+function renderFeature(f) {
+  let layer;
+  if (f.type === 'point') {
+    layer = L.marker(f.latlng, { icon: collectedPointIcon }).bindPopup(criarPopupFeature(f));
+  } else if (f.type === 'line') {
+    layer = L.polyline(f.latlngs, { color: '#38bdf8', weight: 3, opacity: .9 }).bindPopup(criarPopupFeature(f));
+  } else if (f.type === 'polygon') {
+    layer = L.polygon(f.latlngs, { color: '#ff8426', weight: 2.5, fillColor: '#ff8426', fillOpacity: 0.18 }).bindPopup(criarPopupFeature(f));
+  }
+  collectedLayer.addLayer(layer);
+  STATE.markers[f.id] = layer;
+  return layer;
+}
+function deleteFeature(id) {
+  const layer = STATE.markers[id];
+  if (layer) { collectedLayer.removeLayer(layer); delete STATE.markers[id]; }
+  STATE.features = STATE.features.filter(f => f.id !== id);
+  saveState();
+  updateIndicators();
+  if (typeof refreshAttrTable === 'function') refreshAttrTable();
+}
+// Atualiza descrição de uma feição e recarrega o popup
+function updateFeatureDesc(id, desc) {
+  const f = STATE.features.find(x => x.id === id);
+  if (!f) return;
+  f.desc = desc;
+  saveState();
+  const layer = STATE.markers[id];
+  if (layer) layer.setPopupContent(criarPopupFeature(f));
+  if (typeof refreshAttrTable === 'function') refreshAttrTable();
+}
+function openFeaturePopup(id) {
+  const layer = STATE.markers[id];
+  if (layer && layer.openPopup) { layer.openPopup(); }
+  else if (layer && layer.getBounds) {
+    map.fitBounds(layer.getBounds().pad(0.3));
+    if (layer.openPopup) layer.openPopup();
+  }
+}
+function flyToFeature(id) {
+  const f = STATE.features.find(x => x.id === id);
+  if (!f) return;
+  if (f.type === 'point') map.flyTo(f.latlng, 16);
+  else if (f.type === 'line') map.flyToBounds(L.latLngBounds(f.latlngs).pad(0.3));
+  else { const c = featCenter(f); map.flyTo(c, 15); }
+}
+
+/* ============================================================
+   COLETA DE PONTOS
+   ============================================================ */
+function addCollectedPoint(lat, lng, desc) {
+  const f = addFeature('point', [lat, lng], null, desc, {});
+  renderCollectedList();
+  return f;
+}
+function renderCollectedList() {
+  const box = document.getElementById('collected-list');
+  const pts = STATE.features.filter(f => f.type === 'point');
+  if (pts.length === 0) {
+    box.innerHTML = '<div class="collected-empty">Nenhum ponto coletado.</div>';
+    return;
+  }
+  box.innerHTML = '';
+  pts.forEach((p, i) => {
+    const el = document.createElement('div');
+    el.className = 'collected-item';
+    el.innerHTML = `
+      <span class="ci-name">${i + 1}. ${p.desc || 'Ponto sem descrição'}</span>
+      <span style="color:var(--text-muted);font-family:monospace;font-size:10px">${p.latlng[0].toFixed(4)},${p.latlng[1].toFixed(4)}</span>
+      <span class="ci-del" data-del="${p.id}">${iconX()}</span>`;
+    el.querySelector('.ci-name').onclick = () => flyToFeature(p.id);
+    el.querySelector('.ci-del').onclick = () => { deleteFeature(p.id); renderCollectedList(); };
+    box.appendChild(el);
+  });
+}
+document.getElementById('btn-collect-gps').onclick = () => {
+  if (!navigator.geolocation) return toast('Geolocalização não suportada', 'error');
+  setStatus('Obtendo GPS...');
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const { latitude: lat, longitude: lng } = pos.coords;
+      const desc = document.getElementById('collect-desc').value.trim();
+      addCollectedPoint(lat, lng, desc);
+      map.flyTo([lat, lng], 16);
+      toast('Ponto coletado na sua posição', 'success');
+      setStatus('Ponto coletado');
+    },
+    err => { toast('Falha no GPS: ' + err.message, 'error'); setStatus('GPS indisponível'); },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+};
+document.getElementById('btn-collect-click').onclick = () => setMode('point');
+
+/* ============================================================
+   MODOS DE COLETA: PONTO / LINHA / POLÍGONO
+   Três ferramentas independentes e mutuamente exclusivas.
+   ============================================================ */
+const measureBar = document.getElementById('measure-bar');
+
+// Vincula as 3 ferramentas da barra de ferramentas
+document.getElementById('tool-point').onclick = () => setMode(STATE.mode === 'point' ? null : 'point');
+document.getElementById('tool-line').onclick  = () => setMode(STATE.mode === 'line'  ? null : 'line');
+document.getElementById('tool-poly').onclick  = () => setMode(STATE.mode === 'polygon' ? null : 'polygon');
+document.getElementById('measure-clear').onclick = () => { clearMeasure(); setMode(null); };
+
+function setMode(mode) {
+  STATE.mode = mode;
+  // Atualiza botoes ativos (ferramentas + botao "Marcar no mapa")
+  document.getElementById('tool-point').classList.toggle('active', mode === 'point');
+  document.getElementById('tool-line').classList.toggle('active', mode === 'line');
+  document.getElementById('tool-poly').classList.toggle('active', mode === 'polygon');
+  const mapBtn = document.getElementById('btn-collect-click');
+  if (mapBtn) mapBtn.classList.toggle('active', mode === 'point');
+  // Barra de medição: só mostra para linha/polígono
+  if (mode === 'line' || mode === 'polygon') {
+    clearMeasure();
+    measureBar.classList.add('show');
+    const title = document.getElementById('measure-title');
+    title.textContent = mode === 'line' ? 'DISTÂNCIA' : 'ÁREA';
+    document.getElementById('measure-area-wrap').style.display = mode === 'polygon' ? 'inline-flex' : 'none';
+    document.getElementById('measure-dist-label').textContent = mode === 'polygon' ? 'Perímetro:' : 'Distância:';
+    document.getElementById('measure-dist').textContent = '—';
+    document.getElementById('measure-area').textContent = '—';
+    setStatus(mode === 'line' ? 'Linha: clique para adicionar pontos' : 'Área: clique para adicionar vértices');
+    toast((mode === 'line' ? 'Modo distância' : 'Modo área') + ' ativo');
+    map.getContainer().style.cursor = 'crosshair';
+  } else if (mode === 'point') {
+    measureBar.classList.remove('show');
+    clearMeasure();
+    setStatus('Ponto: clique no mapa para coletar');
+    toast('Modo ponto ativo — clique no mapa');
+    map.getContainer().style.cursor = 'crosshair';
+  } else {
+    measureBar.classList.remove('show');
+    clearMeasure();
+    setStatus('Sistema pronto');
+    map.getContainer().style.cursor = '';
+  }
+}
+
+function clearMeasure() {
+  STATE.measure.points = [];
+  if (STATE.measure.line) { map.removeLayer(STATE.measure.line); STATE.measure.line = null; }
+  if (STATE.measure.polygon) { map.removeLayer(STATE.measure.polygon); STATE.measure.polygon = null; }
+  if (STATE.measure.preview) { map.removeLayer(STATE.measure.preview); STATE.measure.preview = null; }
+  STATE.measure.markers.forEach(m => map.removeLayer(m));
+  STATE.measure.markers = [];
+  const dEl = document.getElementById('measure-dist');
+  const aEl = document.getElementById('measure-area');
+  if (dEl) dEl.textContent = '—';
+  if (aEl) aEl.textContent = '—';
+}
+
+// Adiciona um vértice à geometria em construção (linha ou polígono)
+function addVertex(latlng) {
+  STATE.measure.points.push(latlng);
+  const vm = L.circleMarker(latlng, {
+    radius: 4.5, color: '#ff8426', fillColor: '#ffb36b', fillOpacity: 1, weight: 2
+  }).addTo(map);
+  vm.bindTooltip('Vértice ' + STATE.measure.points.length, { permanent: false, direction: 'top', className: 'vertex-tip' });
+  STATE.measure.markers.push(vm);
+  redrawMeasure();
+}
+
+// Redesenha a geometria e recalcula distância/área conforme o modo ativo
+function redrawMeasure() {
+  const pts = STATE.measure.points;
+  if (STATE.measure.line) { map.removeLayer(STATE.measure.line); STATE.measure.line = null; }
+  if (STATE.measure.polygon) { map.removeLayer(STATE.measure.polygon); STATE.measure.polygon = null; }
+
+  if (STATE.mode === 'line') {
+    // Linha: nunca vira polígono
+    if (pts.length >= 2) {
+      STATE.measure.line = L.polyline(pts, {
+        color: '#ffb36b', weight: 3, opacity: .95
+      }).addTo(map);
+      document.getElementById('measure-dist').textContent = formatDist(lineLength(pts));
+    }
+  } else if (STATE.mode === 'polygon') {
+    // Polígono: fecha automaticamente quando tem >=3 pontos
+    if (pts.length >= 3) {
+      STATE.measure.polygon = L.polygon(pts, {
+        color: '#ff8426', weight: 2.5, opacity: .9,
+        fillColor: '#ff8426', fillOpacity: 0.18
+      }).addTo(map);
+      document.getElementById('measure-dist').textContent = formatDist(perimeter(pts));
+      document.getElementById('measure-area').textContent = formatArea(polygonArea(pts));
+    } else if (pts.length === 2) {
+      // mostra o segmento inicial enquanto fecha o polígono
+      STATE.measure.line = L.polyline(pts, { color: '#ffb36b', weight: 2.5, dashArray: '5,5' }).addTo(map);
+      document.getElementById('measure-dist').textContent = formatDist(lineLength(pts));
+    }
+  }
+}
+
+// Preview ao mover o mouse: linha pontilhada do último ponto até o cursor
+function updatePreview(latlng) {
+  const pts = STATE.measure.points;
+  if (pts.length === 0) return;
+  if (STATE.measure.preview) { map.removeLayer(STATE.measure.preview); STATE.measure.preview = null; }
+  const seg = [pts[pts.length - 1], latlng];
+  if (STATE.mode === 'polygon' && pts.length >= 2) {
+    // no polígono, preview inclui o fechamento até o 1o ponto
+    seg.push(pts[0]);
+  }
+  STATE.measure.preview = L.polyline(seg, {
+    color: '#ff8426', weight: 1.5, opacity: .5, dashArray: '4,6'
+  }).addTo(map);
+}
+
+function lineLength(pts) {
+  let d = 0;
+  for (let i = 1; i < pts.length; i++) d += pts[i - 1].distanceTo(pts[i]);
+  return d;
+}
+function perimeter(pts) {
+  if (pts.length < 3) return lineLength(pts);
+  let d = lineLength(pts);
+  d += pts[pts.length - 1].distanceTo(pts[0]); // fecha o polígono
+  return d;
+}
+function formatDist(m) {
+  return m < 1000 ? (m.toFixed(0) + ' m') : ((m / 1000).toFixed(2) + ' km');
+}
+function formatArea(m2) {
+  return m2 < 100000 ? (m2.toFixed(0) + ' m²') : ((m2 / 1000000).toFixed(3) + ' km²');
+}
+// Área pela fórmula esférica (shoelace sobre o geoide)
+function polygonArea(pts) {
+  if (pts.length < 3) return 0;
+  let area = 0;
+  const R = 6378137;
+  for (let i = 0; i < pts.length; i++) {
+    const p1 = pts[i], p2 = pts[(i + 1) % pts.length];
+    area += toRad(p2.lng - p1.lng) * (2 + Math.sin(toRad(p1.lat)) + Math.sin(toRad(p2.lat)));
+  }
+  return Math.abs(area * R * R / 2);
+}
+function toRad(d) { return d * Math.PI / 180; }
+
+/* ============================================================
+   CLIQUE NO MAPA (roteado conforme o modo ativo)
+   ============================================================ */
+map.on('click', e => {
+  document.getElementById('footer-coords').textContent =
+    `${e.latlng.lat.toFixed(5)}° , ${e.latlng.lng.toFixed(5)}°`;
+  if (STATE.mode === 'point') {
+    // PONTO: clique único cria um ponto coletado imediatamente
+    const desc = document.getElementById('collect-desc').value.trim();
+    addCollectedPoint(e.latlng.lat, e.latlng.lng, desc);
+    toast('Ponto coletado', 'success');
+  } else if (STATE.mode === 'line') {
+    // LINHA: adiciona vértice à medição de distância
+    addVertex(e.latlng);
+  } else if (STATE.mode === 'polygon') {
+    // POLÍGONO: adiciona vértice à medição de área
+    addVertex(e.latlng);
+  }
+});
+map.on('mousemove', e => {
+  document.getElementById('footer-coords').textContent =
+    `${e.latlng.lat.toFixed(5)}° , ${e.latlng.lng.toFixed(5)}°`;
+  if (STATE.mode === 'line' || STATE.mode === 'polygon') updatePreview(e.latlng);
+});
+map.on('dblclick', e => {
+  // Duplo-clique finaliza a geometria em construção e a salva como feição
+  if (STATE.mode === 'line' || STATE.mode === 'polygon') {
+    L.DomEvent.stopPropagation(e);
+    if (STATE.measure.preview) { map.removeLayer(STATE.measure.preview); STATE.measure.preview = null; }
+    const pts = STATE.measure.points.map(p => [p.lat, p.lng]);
+    const n = pts.length;
+    if (n < 2) { toast('Adicione mais pontos', 'error'); return; }
+    const mode = STATE.mode;
+    let meta = {};
+    if (mode === 'line') meta = { length: lineLength(STATE.measure.points) };
+    else meta = { area: polygonArea(STATE.measure.points), perimeter: perimeter(STATE.measure.points) };
+    // limpa a geometria temporária de medição e cria a feição persistida
+    clearMeasure();
+    const f = addFeature(mode, null, pts, '', meta);
+    renderCollectedList();
+    if (mode === 'line') toast('Linha salva (' + formatDist(meta.length) + ')', 'success');
+    else toast('Polígono salvo (' + formatArea(meta.area) + ')', 'success');
+    // abre o popup para descrever imediatamente
+    setTimeout(() => openFeaturePopup(f.id), 200);
+    setMode(null);
+  }
+});
+// Desabilita o duplo-zoom do Leaflet (que conflita com o duplo-clique de finalizar)
+map.doubleClickZoom.disable();
+
+/* ============================================================
+   IMPORTAR KML
+   ============================================================ */
+document.getElementById('kml-file').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (ext === 'kmz') {
+    reader.onload = ev => {
+      // KMZ precisa de JSZip — fallback: avisa
+      toast('KMZ requer conversão. Use arquivo .kml', 'error');
+    };
+    reader.readAsArrayBuffer(file);
+    return;
+  }
+  reader.onload = ev => {
+    try {
+      const parser = new DOMParser();
+      const kml = parser.parseFromString(ev.target.result, 'text/xml');
+      const layer = new L.KML(kml, { async: true });
+      const id = Date.now();
+      const entry = { id, name: file.name, layer };
+      STATE.kmlLayers.push(entry);
+      layer.addTo(map);
+      try {
+        const b = layer.getBounds();
+        if (b.isValid()) map.flyToBounds(b, { padding: [40, 40] });
+      } catch (_) {}
+      renderKmlList();
+      updateIndicators();
+      toast('KML "' + file.name + '" importado', 'success');
+      setStatus('Camada KML carregada');
+    } catch (err) {
+      toast('Erro ao ler KML: ' + err.message, 'error');
+    }
+  };
+  reader.readAsText(file);
+});
+function renderKmlList() {
+  const box = document.getElementById('kml-list');
+  if (STATE.kmlLayers.length === 0) { box.innerHTML = ''; return; }
+  box.innerHTML = '';
+  STATE.kmlLayers.forEach(k => {
+    const el = document.createElement('div');
+    el.className = 'collected-item';
+    el.innerHTML = `
+      <span class="ci-name">${iconSvg('i-map')} ${k.name}</span>
+      <span class="ci-del" data-kml="${k.id}">${iconX()}</span>`;
+    el.querySelector('.ci-del').onclick = () => {
+      map.removeLayer(k.layer);
+      STATE.kmlLayers = STATE.kmlLayers.filter(x => x.id !== k.id);
+      renderKmlList(); updateIndicators();
+    };
+    box.appendChild(el);
+  });
+}
+
+/* ============================================================
+   EXPORTAR KML
+   ============================================================ */
+document.getElementById('btn-export-kml').onclick = () => {
+  let placemarks = '';
+  let count = 0;
+  // Escolas prioritárias (com observação de campo, se houver)
+  ESCOLAS.filter(e => isPriority(e.id)).forEach(e => {
+    const obs = getSchoolObs(e.id);
+    const desc = `${e.endereco} | ${e.alunos} alunos | ${e.local}` + (obs ? ' | OBS: ' + obs : '');
+    placemarks += `
+  <Placemark>
+    <name>${escapeXml(e.nome)}</name>
+    <description>${escapeXml(desc)}</description>
+    <styleUrl>#prio</styleUrl>
+    <Point><coordinates>${e.lng},${e.lat},0</coordinates></Point>
+  </Placemark>`;
+    count++;
+  });
+  // Feições coletadas (ponto/linha/polígono)
+  STATE.features.forEach(f => {
+    const nm = f.desc || ({ point: 'Ponto', line: 'Linha', polygon: 'Polígono' }[f.type]);
+    const md = f.type === 'line' ? `Comprimento: ${formatDist(f.meta.length)}`
+             : f.type === 'polygon' ? `Área: ${formatArea(f.meta.area)} · Perímetro: ${formatDist(f.meta.perimeter)}`
+             : `Ponto coletado em campo`;
+    if (f.type === 'point') {
+      placemarks += `
+  <Placemark><name>${escapeXml(nm)}</name><description>${escapeXml(md)}</description><styleUrl>#pt</styleUrl>
+    <Point><coordinates>${f.latlng[1]},${f.latlng[0]},0</coordinates></Point></Placemark>`;
+    } else if (f.type === 'line') {
+      const coords = f.latlngs.map(p => `${p[1]},${p[0]},0`).join(' ');
+      placemarks += `
+  <Placemark><name>${escapeXml(nm)}</name><description>${escapeXml(md)}</description><styleUrl>#ln</styleUrl>
+    <LineString><coordinates>${coords}</coordinates></LineString></Placemark>`;
+    } else if (f.type === 'polygon') {
+      const ring = [...f.latlngs.map(p => `${p[1]},${p[0]},0`), `${f.latlngs[0][1]},${f.latlngs[0][0]},0`].join(' ');
+      placemarks += `
+  <Placemark><name>${escapeXml(nm)}</name><description>${escapeXml(md)}</description><styleUrl>#pg</styleUrl>
+    <Polygon><outerBoundaryIs><LinearRing><coordinates>${ring}</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>`;
+    }
+    count++;
+  });
+  if (count === 0) return toast('Nada para exportar', 'error');
+
+  const kml = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+<Document>
+  <name>Puraquequara - Exportação WebGIS</name>
+  <description>Escolas prioritárias, pontos, linhas e polígonos coletados em campo</description>
+  <Style id="prio"><IconStyle><color>ff2684ff</color><scale>1.2</scale><Icon><href>https://maps.google.com/mapfiles/kml/paddle/ylw-stars.png</href></Icon></IconStyle></Style>
+  <Style id="pt"><IconStyle><color>ff7fd035</color><scale>1.0</scale><Icon><href>https://maps.google.com/mapfiles/kml/pushpin/grn-pushpin.png</href></Icon></IconStyle></Style>
+  <Style id="ln"><LineStyle><color>fff0b338</color><width>3</width></LineStyle></Style>
+  <Style id="pg"><LineStyle><color>ff2684ff</color><width>2</width></LineStyle><PolyStyle><color>332684ff</color></PolyStyle></Style>
+${placemarks}
+</Document>
+</kml>`;
+  const blob = new Blob([kml], { type: 'application/vnd.google-earth.kml+xml' });
+  const a = document.createElement('a');
+  const date = new Date().toISOString().slice(0, 10);
+  a.href = URL.createObjectURL(blob);
+  a.download = `puraquequara_${date}.kml`;
+  a.click();
+  toast(`KML exportado (${count} feições)`, 'success');
+};
+function escapeXml(s) {
+  return String(s).replace(/[<>&'"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c]));
+}
+
+/* ============================================================
+   GEOLOCALIZAÇÃO / RASTREAMENTO
+   ============================================================ */
+document.getElementById('btn-track-start').onclick = startTracking;
+document.getElementById('btn-track-stop').onclick = stopTracking;
+document.getElementById('btn-locate').onclick = () => {
+  if (!navigator.geolocation) return toast('GPS não suportado', 'error');
+  setStatus('Localizando...');
+  navigator.geolocation.getCurrentPosition(pos => {
+    const { latitude: lat, longitude: lng, accuracy } = pos.coords;
+    placeUserMarker(lat, lng, accuracy);
+    map.flyTo([lat, lng], 16);
+    toast(`Você está aqui (±${Math.round(accuracy)}m)`, 'success');
+    setStatus('Localização obtida');
+  }, err => { toast('GPS falhou: ' + err.message, 'error'); setStatus('GPS indisponível'); },
+    { enableHighAccuracy: true, timeout: 10000 });
+};
+function startTracking() {
+  if (!navigator.geolocation) return toast('GPS não suportado', 'error');
+  if (STATE.tracking) return;
+  STATE.tracking = true;
+  setStatus('Rastreamento ativo');
+  toast('Rastreamento iniciado', 'success');
+  STATE.watchId = navigator.geolocation.watchPosition(pos => {
+    const { latitude: lat, longitude: lng, accuracy } = pos.coords;
+    placeUserMarker(lat, lng, accuracy);
+    document.getElementById('loc-info').innerHTML =
+      `<b style="color:var(--blue)">●</b> ${lat.toFixed(6)}, ${lng.toFixed(6)}<br>Precisão: ±${Math.round(accuracy)} m`;
+  }, err => { toast('Erro no rastreamento: ' + err.message, 'error'); },
+    { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 });
+}
+function stopTracking() {
+  if (!STATE.tracking) return;
+  navigator.geolocation.clearWatch(STATE.watchId);
+  STATE.tracking = false;
+  setStatus('Sistema pronto');
+  document.getElementById('loc-info').innerHTML = '';
+  toast('Rastreamento parado');
+}
+function placeUserMarker(lat, lng, accuracy) {
+  if (STATE.userAccuracy) { map.removeLayer(STATE.userAccuracy); STATE.userAccuracy = null; }
+  if (STATE.userMarker) { map.removeLayer(STATE.userMarker); }
+  if (accuracy) {
+    STATE.userAccuracy = L.circle([lat, lng], { radius: accuracy, color: '#38bdf8', fillColor: '#38bdf8', fillOpacity: 0.08, weight: 1, dashArray: '4,4' }).addTo(map);
+  }
+  STATE.userMarker = L.marker([lat, lng], { icon: userSonarIcon, zIndexOffset: 1000 })
+    .bindPopup(`<div class="popup-card"><span class="popup-tag" style="background:rgba(56,189,248,0.15);color:var(--blue);border:1px solid rgba(56,189,248,0.4)">Sua posição</span><div class="popup-coords">${lat.toFixed(6)}, ${lng.toFixed(6)}${accuracy ? '<br>Precisão ±' + Math.round(accuracy) + ' m' : ''}</div></div>`)
+    .addTo(map);
+}
+
+/* ============================================================
+   CONTROLES DE UI
+   ============================================================ */
+// Sidebar toggle
+document.getElementById('btn-toggle-sidebar').onclick = () => {
+  document.getElementById('sidebar').classList.toggle('collapsed');
+  setTimeout(() => map.invalidateSize(), 300);
+};
+// Fit à extensão das escolas prioritárias
+document.getElementById('btn-fit').onclick = () => {
+  const pri = ESCOLAS.filter(e => isPriority(e.id)).map(e => [e.lat, e.lng]);
+  if (pri.length === 0) return toast('Nenhuma escola prioritária selecionada', 'error');
+  map.flyToBounds(L.latLngBounds(pri).pad(0.4), { duration: 1.2 });
+  toast('Voo ajustado às escolas prioritárias');
+};
+// Módulos acordeão
+document.querySelectorAll('.module-head').forEach(h => {
+  h.onclick = () => h.parentElement.classList.toggle('open');
+});
+
+/* ============================================================
+   HELPERS
+   ============================================================ */
+function updateIndicators() {
+  document.getElementById('ind-features').textContent = STATE.features.length;
+  document.getElementById('ind-kml').textContent = STATE.kmlLayers.length;
+  document.getElementById('ind-priority').textContent = ESCOLAS.filter(e => isPriority(e.id)).length;
+}
+function setStatus(t) { document.getElementById('status-text').textContent = t; }
+function toast(msg, type) {
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = 'toast' + (type ? ' ' + type : '');
+  const sym = type === 'error' ? 'i-alert' : type === 'success' ? 'i-check' : 'i-info';
+  const col = type === 'error' ? 'var(--red)' : type === 'success' ? 'var(--green)' : 'var(--amber-light)';
+  t.innerHTML = `${iconSvg(sym, col)} ${msg}`;
+  c.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateY(15px)'; t.style.transition = 'all .3s'; }, 2600);
+  setTimeout(() => t.remove(), 3000);
+}
+
+/* ============================================================
+   INICIALIZAÇÃO
+   ============================================================ */
+(function init() {
+  // 1. Renderiza feições persistidas (loadState já foi chamado antes das escolas)
+  STATE.features.forEach(renderFeature);
+  renderCollectedList();
+  // 2. Indicadores do cabeçalho
+  const alunos = ESCOLAS.reduce((s, e) => s + e.alunos, 0);
+  document.getElementById('ind-schools').textContent = ESCOLAS.length;
+  document.getElementById('ind-students').textContent = alunos.toLocaleString('pt-BR');
+  updateIndicators();
+  // 3. Voo inicial para as prioritárias
+  setTimeout(() => {
+    const priLL = ESCOLAS.filter(e => isPriority(e.id)).map(e => [e.lat, e.lng]);
+    if (priLL.length) map.fitBounds(L.latLngBounds(priLL).pad(0.6));
+  }, 200);
+  setTimeout(() => toast('WebGIS pronto — ' + STATE.features.length + ' feições · ' + ESCOLAS.filter(e=>isPriority(e.id)).length + ' prioritárias', 'success'), 600);
+})();
+
+/* ============================================================
+   EVENTOS DE POPUP (delegação — salvar obs de escola, feições)
+   ============================================================ */
+map.on('popupopen', e => {
+  const root = e.popup.getElement();
+  if (!root) return;
+  // Salvar observação de escola (auto-save ao digitar)
+  const schoolTA = root.querySelector('[data-school-obs]');
+  if (schoolTA) {
+    schoolTA.addEventListener('input', () => setSchoolObs(schoolTA.dataset.schoolObs, schoolTA.value));
+  }
+  // Alternar prioridade da escola
+  const prioBtn = root.querySelector('[data-school-prio]');
+  if (prioBtn) {
+    prioBtn.onclick = () => {
+      const id = parseInt(prioBtn.dataset.schoolPrio);
+      togglePriority(id);
+      refreshSchoolMarker(id);
+      renderPriorityList();
+      renderPriorityPicker();
+      updateIndicators();
+      // reabre o popup atualizado
+      setTimeout(() => { STATE.schoolMarkers[id] && STATE.schoolMarkers[id].openPopup(); }, 50);
+      toast(isPriority(id) ? 'Escola marcada como prioritária' : 'Prioridade removida', 'success');
+    };
+  }
+  // Salvar feição
+  const saveBtn = root.querySelector('[data-feat-save]');
+  const featTA = root.querySelector('[data-feat-desc]');
+  if (saveBtn && featTA) {
+    saveBtn.onclick = () => {
+      updateFeatureDesc(featTA.dataset.featDesc, featTA.value);
+      toast('Descrição salva', 'success');
+    };
+  }
+  // Excluir feição
+  const delBtn = root.querySelector('[data-feat-del]');
+  if (delBtn) {
+    delBtn.onclick = () => {
+      deleteFeature(delBtn.dataset.featDel);
+      map.closePopup();
+      toast('Feição excluída', 'success');
+    };
+  }
+});
+
+/* ============================================================
+   TABELA DE ATRIBUTOS (modal)
+   ============================================================ */
+const attrModal = document.getElementById('attr-modal');
+document.getElementById('btn-table').onclick = () => {
+  buildAttrTabs();
+  refreshAttrTable();
+  attrModal.classList.add('show');
+};
+document.getElementById('attr-close').onclick = () => attrModal.classList.remove('show');
+attrModal.addEventListener('click', e => { if (e.target === attrModal) attrModal.classList.remove('show'); });
+document.getElementById('attr-search').addEventListener('input', refreshAttrTable);
+
+function buildAttrTabs() {
+  const tabs = document.getElementById('attr-tabs');
+  const counts = {
+    all: 'Tudo',
+    point: 'Pontos',
+    line: 'Linhas',
+    polygon: 'Polígonos',
+    school: 'Escolas'
+  };
+  tabs.innerHTML = '';
+  Object.entries(counts).forEach(([key, label]) => {
+    const n = key === 'all' ? STATE.features.length + ESCOLAS.length
+            : key === 'school' ? ESCOLAS.length
+            : STATE.features.filter(f => f.type === key).length;
+    const btn = document.createElement('button');
+    btn.className = 'modal-tab' + (STATE.attrTab === key ? ' active' : '');
+    btn.textContent = `${label} (${n})`;
+    btn.onclick = () => { STATE.attrTab = key; buildAttrTabs(); refreshAttrTable(); };
+    tabs.appendChild(btn);
+  });
+}
+
+function refreshAttrTable() {
+  const tbody = document.getElementById('attr-tbody');
+  const q = document.getElementById('attr-search').value.trim().toLowerCase();
+  const rows = [];
+
+  // Escolas (se aba all ou school)
+  if (STATE.attrTab === 'all' || STATE.attrTab === 'school') {
+    ESCOLAS.forEach(e => {
+      const obs = getSchoolObs(e.id);
+      if (q && !(e.nome + ' ' + e.bairro + ' ' + obs).toLowerCase().includes(q)) return;
+      rows.push(`
+        <tr data-kind="school" data-id="${e.id}">
+          <td><span class="attr-type t-school">Escola</span></td>
+          <td><input class="cell" data-school-name="${e.id}" value="${attrEscape(e.nome)}"></td>
+          <td><input class="cell" data-school-loc="${e.id}" value="${attrEscape(e.bairro + ' · ' + e.local)}"></td>
+          <td style="font-family:monospace;font-size:11px">${e.lat.toFixed(5)}, ${e.lng.toFixed(5)}</td>
+          <td class="attr-actions">
+            <span class="attr-act" data-zoom-school="${e.id}" title="Zoom">${iconSvg('i-target')}</span>
+            <a class="attr-act" href="${gmapsUrl(e.lat, e.lng)}" target="_blank" rel="noopener" title="Google Maps">${iconSvg('i-external')}</a>
+          </td>
+        </tr>`);
+    });
+  }
+
+  // Feições coletadas
+  const types = STATE.attrTab === 'all' ? ['point','line','polygon'] : [STATE.attrTab];
+  STATE.features.forEach(f => {
+    if (!types.includes(f.type)) return;
+    if (q && !(f.desc || '').toLowerCase().includes(q)) return;
+    const tLabel = { point: 'Ponto', line: 'Linha', polygon: 'Polígono' }[f.type];
+    const tClass = { point: 't-point', line: 't-line', polygon: 't-poly' }[f.type];
+    let medida = '';
+    if (f.type === 'point') medida = `${f.latlng[0].toFixed(5)}, ${f.latlng[1].toFixed(5)}`;
+    else if (f.type === 'line') medida = `${formatDist(f.meta.length)}`;
+    else medida = `${formatArea(f.meta.area)}`;
+    const center = featCenter(f);
+    rows.push(`
+      <tr data-kind="feat" data-id="${f.id}">
+        <td><span class="attr-type ${tClass}">${tLabel}</span></td>
+        <td><input class="cell" data-feat-desc="${f.id}" value="${attrEscape(f.desc || '')}" placeholder="(sem descrição)"></td>
+        <td style="color:var(--text-muted)">${f.type === 'point' ? 'Ponto' : (f.latlngs.length + ' vértices')}</td>
+        <td style="font-family:monospace;font-size:11px">${medida}</td>
+        <td class="attr-actions">
+          <span class="attr-act" data-zoom-feat="${f.id}" title="Zoom">${iconSvg('i-target')}</span>
+          <a class="attr-act" href="${gmapsUrl(center[0], center[1])}" target="_blank" rel="noopener" title="Google Maps">${iconSvg('i-external')}</a>
+          <span class="attr-act del" data-del-feat="${f.id}" title="Excluir">${iconSvg('i-x')}</span>
+        </td>
+      </tr>`);
+  });
+
+  if (rows.length === 0) {
+    tbody.innerHTML = '';
+    document.getElementById('attr-empty').style.display = 'block';
+  } else {
+    document.getElementById('attr-empty').style.display = 'none';
+    tbody.innerHTML = rows.join('');
+  }
+  document.getElementById('attr-count').textContent = rows.length + ' feições';
+}
+
+// Eventos da tabela (delegação no tbody)
+document.getElementById('attr-tbody').addEventListener('click', e => {
+  const t = e.target.closest('[data-zoom-school],[data-zoom-feat],[data-del-feat]');
+  if (!t) return;
+  if (t.dataset.zoomSchool) {
+    const sc = ESCOLAS.find(x => x.id == t.dataset.zoomSchool);
+    if (sc) { map.flyTo([sc.lat, sc.lng], 16); attrModal.classList.remove('show'); }
+  }
+  if (t.dataset.zoomFeat) { flyToFeature(t.dataset.zoomFeat); attrModal.classList.remove('show'); }
+  if (t.dataset.delFeat) { deleteFeature(t.dataset.delFeat); refreshAttrTable(); renderCollectedList(); }
+});
+// Edição de descrição na tabela (auto-save)
+document.getElementById('attr-tbody').addEventListener('change', e => {
+  if (e.target.dataset.featDesc != null) {
+    updateFeatureDesc(e.target.dataset.featDesc, e.target.value);
+  }
+  if (e.target.dataset.schoolObs != null) {
+    setSchoolObs(e.target.dataset.schoolObs, e.target.value);
+  }
+});
+function attrEscape(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>
