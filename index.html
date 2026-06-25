@@ -100,29 +100,35 @@ html, body {
   font-size: 10px; color: var(--text-muted); letter-spacing: .5px; text-transform: uppercase;
   margin-top: 1px;
 }
-/* Indicadores rápidos */
-.indicators {
-  display: flex; gap: 10px; flex: 1; overflow-x: auto;
+/* Indicadores na barra lateral */
+.sidebar-indicators {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
-.indicator {
-  background: var(--bg-panel-soft);
+.sidebar-indicator {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.25);
   border: 1px solid var(--border-soft);
-  border-radius: 10px;
-  padding: 7px 14px;
-  display: flex; flex-direction: column; align-items: center;
-  min-width: 88px;
-  transition: border-color .2s, box-shadow .2s;
+  border-radius: 8px;
+  transition: border-color .2s;
 }
-.indicator:hover { border-color: rgba(255,132,38,0.5); }
-.indicator-num {
-  font-size: 20px; font-weight: 800;
-  background: linear-gradient(135deg, var(--amber-light), var(--amber));
-  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
-  line-height: 1;
+.sidebar-indicator:hover {
+  border-color: rgba(255, 132, 38, 0.3);
 }
-.indicator-label {
-  font-size: 9px; color: var(--text-muted); letter-spacing: .8px; text-transform: uppercase; margin-top: 3px;
-  white-space: nowrap;
+.sind-label {
+  font-size: 11px;
+  color: var(--text-soft);
+  font-weight: 500;
+}
+.sind-num {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--amber-light);
+  font-family: monospace;
 }
 .header-actions { display: flex; gap: 8px; }
 .icon-btn {
@@ -722,36 +728,17 @@ html, body {
   .sidebar.collapsed { transform: translateX(-100%); width: 320px; max-width: 86%; }
   /* Mapa ocupa a largura total */
   .body { grid-template-columns: 1fr; }
-  /* Indicadores: mostra só os essenciais */
-  .indicator:nth-child(n+4) { display: none; }
 }
 
 /* --- SMARTPHONE (até 640px) --- */
 @media (max-width: 640px) {
-  /* Cabeçalho compacto com quebra de linha para estatísticas */
-  .header { padding: 8px 12px; gap: 8px; flex-wrap: wrap; }
+  /* Cabeçalho compacto */
+  .header { padding: 8px 12px; gap: 8px; }
   .brand { padding-right: 0; gap: 7px; border-right: none; }
   .brand-logo { height: 34px; }
   .brand-title { font-size: 11px; letter-spacing: .5px; }
   .brand-sub { font-size: 9px; }
   .header-actions { margin-left: auto; }
-  /* Reorganiza indicadores em uma segunda linha rolável no mobile */
-  .indicators {
-    display: flex;
-    width: 100%;
-    order: 3;
-    padding: 6px 0 2px 0;
-    gap: 6px;
-    border-top: 1px solid var(--border-soft);
-    margin-top: 4px;
-  }
-  .indicator {
-    padding: 4px 8px;
-    min-width: 65px;
-    border-radius: 6px;
-  }
-  .indicator-num { font-size: 14px; }
-  .indicator-label { font-size: 8px; margin-top: 1px; }
   /* Botões do header um pouco menores, bons alvos de toque */
   .icon-btn { width: 40px; height: 40px; }
   /* Sidebar mais larga (quase tela cheia) */
@@ -865,13 +852,7 @@ html, body {
         <div class="brand-sub">Secretaria Municipal de Educação — Setor de Geotecnologia</div>
       </div>
     </div>
-    <div class="indicators" id="indicators">
-      <div class="indicator"><div class="indicator-num" id="ind-schools">85</div><div class="indicator-label">Escolas</div></div>
-      <div class="indicator"><div class="indicator-num" id="ind-priority">3</div><div class="indicator-label">Prioritárias</div></div>
-      <div class="indicator"><div class="indicator-num" id="ind-students">12.075</div><div class="indicator-label">Alunos</div></div>
-      <div class="indicator"><div class="indicator-num" id="ind-features">0</div><div class="indicator-label">Feições Coletadas</div></div>
-      <div class="indicator"><div class="indicator-num" id="ind-kml">0</div><div class="indicator-label">Camadas KML</div></div>
-    </div>
+    <div style="flex: 1;"></div>
     <div class="header-actions">
       <button class="icon-btn" id="btn-table" title="Tabela de atributos"><svg class="icon"><use href="#i-table"/></svg></button>
       <button class="icon-btn" id="btn-toggle-sidebar" title="Mostrar/ocultar painel"><svg class="icon"><use href="#i-menu"/></svg></button>
@@ -889,6 +870,41 @@ html, body {
     <!-- ===== SIDEBAR ===== -->
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-inner">
+
+        <!-- Módulo: Painel Estatístico -->
+        <div class="module open" id="mod-stats">
+          <div class="module-head">
+            <div class="module-icon"><svg class="icon sm"><use href="#i-info"/></svg></div>
+            <div class="module-title">Estatísticas Gerais</div>
+            <div class="module-toggle"><svg class="icon sm"><use href="#i-chev"/></svg></div>
+          </div>
+          <div class="module-body">
+            <div class="module-content">
+              <div class="sidebar-indicators" id="sidebar-indicators">
+                <div class="sidebar-indicator">
+                  <span class="sind-label">Total de Escolas</span>
+                  <span class="sind-num" id="ind-schools">0</span>
+                </div>
+                <div class="sidebar-indicator">
+                  <span class="sind-label">Escolas Prioritárias</span>
+                  <span class="sind-num" id="ind-priority">0</span>
+                </div>
+                <div class="sidebar-indicator">
+                  <span class="sind-label">Total de Alunos</span>
+                  <span class="sind-num" id="ind-students">0</span>
+                </div>
+                <div class="sidebar-indicator">
+                  <span class="sind-label">Feições Coletadas</span>
+                  <span class="sind-num" id="ind-features">0</span>
+                </div>
+                <div class="sidebar-indicator">
+                  <span class="sind-label">Camadas KML</span>
+                  <span class="sind-num" id="ind-kml">0</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <!-- Módulo: Escolas prioritárias -->
         <div class="module open" id="mod-priority">
