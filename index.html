@@ -12,6 +12,7 @@
 <script src="https://unpkg.com/leaflet-providers@1.13.0/leaflet-providers.js"></script>
 <script src="https://unpkg.com/leaflet-kml@2.0.2/L.KML.js"></script>
 <script src="https://unpkg.com/@mapbox/leaflet-omnivore@0.3.4/leaflet-omnivore.min.js"></script>
+<script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
 
 <style>
 :root {
@@ -1851,39 +1852,281 @@ map.doubleClickZoom.disable();
 document.getElementById('kml-file').addEventListener('change', e => {
   const file = e.target.files[0];
   if (!file) return;
-  const reader = new FileReader();
   const ext = file.name.split('.').pop().toLowerCase();
+  const reader = new FileReader();
+
   if (ext === 'kmz') {
     reader.onload = ev => {
-      // KMZ precisa de JSZip — fallback: avisa
-      toast('KMZ requer conversão. Use arquivo .kml', 'error');
+      JSZip.loadAsync(ev.target.result).then(zip => {
+        const kmlFile = Object.keys(zip.files).find(name => name.toLowerCase().endsWith('.kml'));
+        if (!kmlFile) {
+          throw new Error('Nenhum arquivo KML encontrado dentro do KMZ.');
+        }
+        return zip.files[kmlFile].async('text');
+      }).then(kmlText => {
+        processKmlText(kmlText, file.name);
+      }).catch(err => {
+        toast('Erro ao abrir KMZ: ' + err.message, 'error');
+      });
     };
     reader.readAsArrayBuffer(file);
-    return;
+  } else {
+    reader.onload = ev => {
+      processKmlText(ev.target.result, file.name);
+    };
+    reader.readAsText(file);
   }
-  reader.onload = ev => {
-    try {
-      const parser = new DOMParser();
-      const kml = parser.parseFromString(ev.target.result, 'text/xml');
-      const layer = new L.KML(kml, { async: true });
-      const id = Date.now();
-      const entry = { id, name: file.name, layer };
-      STATE.kmlLayers.push(entry);
-      layer.addTo(map);
-      try {
-        const b = layer.getBounds();
-        if (b.isValid()) map.flyToBounds(b, { padding: [40, 40] });
-      } catch (_) {}
-      renderKmlList();
-      updateIndicators();
-      toast('KML "' + file.name + '" importado', 'success');
-      setStatus('Camada KML carregada');
-    } catch (err) {
-      toast('Erro ao ler KML: ' + err.message, 'error');
-    }
-  };
-  reader.readAsText(file);
 });
+
+function processKmlText(kmlText, fileName) {
+  try {
+    const parser = new DOMParser();
+    const kml = parser.parseFromString(kmlText, 'text/xml');
+    
+    const parserError = kml.querySelector('parsererror');
+    if (parserError) {
+      throw new Error('Falha ao analisar a estrutura XML do KML.');
+    }
+    
+    const layer = parseKmlCustom(kml);
+    if (layer.getLayers().length === 0) {
+      throw new Error('Nenhuma feição geográfica (pontos ou linhas) válida foi encontrada no arquivo.');
+    }
+    
+    const id = Date.now();
+    const entry = { id, name: fileName, layer };
+    STATE.kmlLayers.push(entry);
+    layer.addTo(map);
+    
+    try {
+      const b = layer.getBounds();
+      if (b.isValid()) map.flyToBounds(b, { padding: [40, 40] });
+    } catch (_) {}
+    
+    renderKmlList();
+    updateIndicators();
+    toast(`KML "${fileName}" importado com sucesso`, 'success');
+    setStatus('Camada KML carregada');
+  } catch (err) {
+    toast('Erro no arquivo: ' + err.message, 'error');
+  }
+}
+
+function parseKmlCustom(kmlDoc) {
+  const layerGroup = L.featureGroup();
+  
+  // 1. Mapeamento de Estilos
+  const styles = {};
+  const styleNodes = kmlDoc.querySelectorAll('Style, StyleMap');
+  styleNodes.forEach(styleNode => {
+    const id = styleNode.getAttribute('id');
+    if (!id) return;
+    
+    const lineStyle = styleNode.querySelector('LineStyle');
+    const polyStyle = styleNode.querySelector('PolyStyle');
+    
+    styles[id] = {};
+    if (lineStyle) {
+      const colorNode = lineStyle.querySelector('color');
+      const widthNode = lineStyle.querySelector('width');
+      if (colorNode) styles[id].color = kmlColorToHex(colorNode.textContent);
+      if (widthNode) styles[id].weight = parseFloat(widthNode.textContent);
+    }
+    if (polyStyle) {
+      const colorNode = polyStyle.querySelector('color');
+      const fillNode = polyStyle.querySelector('fill');
+      if (colorNode) styles[id].fillColor = kmlColorToHex(colorNode.textContent);
+      if (fillNode) styles[id].fill = fillNode.textContent !== '0';
+    }
+  });
+
+  function kmlColorToHex(kmlColor) {
+    if (!kmlColor) return '#ff8426';
+    const cleanColor = kmlColor.trim();
+    if (cleanColor.length < 6) return '#ff8426';
+    
+    let hex = cleanColor;
+    if (cleanColor.length === 8) {
+      hex = cleanColor.substring(2); // BBGGRR
+    }
+    
+    if (hex.length === 6) {
+      const b = hex.substring(0, 2);
+      const g = hex.substring(2, 4);
+      const r = hex.substring(4, 6);
+      return `#${r}${g}${b}`;
+    }
+    return '#ff8426';
+  }
+
+  // 2. Mapeamento de Placemarks (Pontos, Linhas, Polígonos, Tracks)
+  const placemarks = kmlDoc.querySelectorAll('Placemark');
+  placemarks.forEach(pm => {
+    const nameNode = pm.querySelector('name');
+    const descNode = pm.querySelector('description');
+    const styleUrlNode = pm.querySelector('styleUrl');
+    
+    const name = nameNode ? nameNode.textContent.trim() : 'Sem Nome';
+    let desc = descNode ? descNode.textContent.trim() : '';
+    
+    // ExtendedData attributes (se existirem atributos extras)
+    const extendedData = pm.querySelector('ExtendedData');
+    if (extendedData) {
+      const dataNodes = extendedData.querySelectorAll('Data, SimpleData');
+      if (dataNodes.length > 0) {
+        let attrHtml = '<div style="margin-top:6px; padding-top:6px; border-top:1px solid var(--border-soft); font-size:10px;">';
+        dataNodes.forEach(dn => {
+          const attrName = dn.getAttribute('name');
+          const valueNode = dn.querySelector('value') || dn;
+          const attrVal = valueNode ? valueNode.textContent.trim() : '';
+          if (attrName && attrVal) {
+            attrHtml += `<div><b>${attrName}:</b> ${attrVal}</div>`;
+          }
+        });
+        attrHtml += '</div>';
+        desc += attrHtml;
+      }
+    }
+    
+    // Obter estilo padrão ou da folha de estilos
+    let style = { color: '#ff8426', weight: 3, fillColor: '#ff8426', fillOpacity: 0.18 };
+    if (styleUrlNode) {
+      const styleId = styleUrlNode.textContent.replace('#', '').trim();
+      if (styles[styleId]) {
+        style = { ...style, ...styles[styleId] };
+      }
+    }
+    
+    // Sobrescrita com estilos em linha (inline), se houver
+    const inlineStyleNode = pm.querySelector('Style');
+    if (inlineStyleNode) {
+      const lineStyle = inlineStyleNode.querySelector('LineStyle');
+      const polyStyle = inlineStyleNode.querySelector('PolyStyle');
+      if (lineStyle) {
+        const colorNode = lineStyle.querySelector('color');
+        const widthNode = lineStyle.querySelector('width');
+        if (colorNode) style.color = kmlColorToHex(colorNode.textContent);
+        if (widthNode) style.weight = parseFloat(widthNode.textContent);
+      }
+      if (polyStyle) {
+        const colorNode = polyStyle.querySelector('color');
+        const fillNode = polyStyle.querySelector('fill');
+        if (colorNode) style.fillColor = kmlColorToHex(colorNode.textContent);
+        if (fillNode) style.fill = fillNode.textContent !== '0';
+      }
+    }
+    
+    // Renderizar cores condicionalmente
+    const color = style.color || '#38bdf8';
+    
+    const popupContent = `<div class="popup-card">
+      <span class="popup-tag" style="background:rgba(255,132,38,0.15);color:var(--amber-light);border:1px solid var(--border-amber)">Vetores KML/KMZ</span>
+      <div class="popup-name">${name}</div>
+      <div class="popup-row">${desc || 'Nenhuma descrição fornecida.'}</div>
+    </div>`;
+    
+    // Point
+    const point = pm.querySelector('Point');
+    if (point) {
+      const coordNode = point.querySelector('coordinates');
+      if (coordNode) {
+        const coords = parseCoordinates(coordNode.textContent)[0];
+        if (coords) {
+          const marker = L.marker([coords.lat, coords.lng], {
+            icon: L.divIcon({
+              className: "",
+              html: `<div class="school-normal-marker" style="background:${color}; box-shadow: 0 0 8px ${color}; border-color:#fff; width:12px; height:12px;"></div>`,
+              iconSize: [12, 12],
+              iconAnchor: [6, 6]
+            })
+          }).bindPopup(popupContent);
+          layerGroup.addLayer(marker);
+        }
+      }
+    }
+    
+    // LineString
+    const lineString = pm.querySelector('LineString');
+    if (lineString) {
+      const coordNode = lineString.querySelector('coordinates');
+      if (coordNode) {
+        const coords = parseCoordinates(coordNode.textContent);
+        if (coords.length > 0) {
+          const polyline = L.polyline(coords.map(c => [c.lat, c.lng]), {
+            color: color,
+            weight: style.weight || 3,
+            opacity: 0.85
+          }).bindPopup(popupContent);
+          layerGroup.addLayer(polyline);
+        }
+      }
+    }
+    
+    // Polygon
+    const polygon = pm.querySelector('Polygon');
+    if (polygon) {
+      const coordNode = polygon.querySelector('coordinates');
+      if (coordNode) {
+        const coords = parseCoordinates(coordNode.textContent);
+        if (coords.length > 0) {
+          const poly = L.polygon(coords.map(c => [c.lat, c.lng]), {
+            color: color,
+            weight: style.weight || 2.5,
+            fillColor: style.fillColor || color,
+            fillOpacity: style.fillOpacity || 0.18
+          }).bindPopup(popupContent);
+          layerGroup.addLayer(poly);
+        }
+      }
+    }
+    
+    // gx:Track e Track (Google extensions)
+    const tracks = Array.from(pm.getElementsByTagName('gx:Track'))
+      .concat(Array.from(pm.getElementsByTagName('Track')));
+    tracks.forEach(track => {
+      const coordNodes = Array.from(track.getElementsByTagName('gx:coord'))
+        .concat(Array.from(track.getElementsByTagName('coord')));
+      const coords = [];
+      coordNodes.forEach(cn => {
+        const parts = cn.textContent.trim().split(/\s+/);
+        if (parts.length >= 2) {
+          const lng = parseFloat(parts[0]);
+          const lat = parseFloat(parts[1]);
+          if (!isNaN(lat) && !isNaN(lng)) {
+            coords.push([lat, lng]);
+          }
+        }
+      });
+      if (coords.length > 0) {
+        const polyline = L.polyline(coords, {
+          color: color,
+          weight: style.weight || 4,
+          opacity: 0.85
+        }).bindPopup(popupContent);
+        layerGroup.addLayer(polyline);
+      }
+    });
+  });
+
+  return layerGroup;
+}
+
+function parseCoordinates(str) {
+  const points = [];
+  const coords = str.trim().split(/[\s\r\n]+/);
+  coords.forEach(c => {
+    if (!c) return;
+    const parts = c.split(',');
+    if (parts.length >= 2) {
+      const lng = parseFloat(parts[0]);
+      const lat = parseFloat(parts[1]);
+      if (!isNaN(lat) && !isNaN(lng)) {
+        points.push({ lat, lng });
+      }
+    }
+  });
+  return points;
+}
 function renderKmlList() {
   const box = document.getElementById('kml-list');
   if (STATE.kmlLayers.length === 0) { box.innerHTML = ''; return; }
