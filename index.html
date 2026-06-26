@@ -957,6 +957,14 @@ html, body {
             <input type="file" id="kml-file" class="hidden-file" accept=".kml">
             <input type="file" id="backup-file" class="hidden-file" accept=".json">
             <div id="kml-list" style="margin-top:8px;"></div>
+            <!-- Relatório Automático de Rota -->
+            <div id="kml-route-report" class="route-analysis-card" style="display:none; margin-top:10px; padding:10px 12px; background:rgba(0,0,0,0.4); border:1px solid var(--border-amber); border-radius:8px; font-size:11px;">
+              <div style="font-weight:700; color:var(--amber-light); text-transform:uppercase; margin-bottom:6px; letter-spacing:.5px; display:flex; align-items:center; gap:5px;"><svg class="icon sm" style="color:inherit"><use href="#i-route"/></svg> Análise de Rota</div>
+              <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span>Nome da Rota:</span> <b id="rr-name" style="color:var(--text-main)">—</b></div>
+              <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span>Distância Total:</span> <b id="rr-dist" style="color:var(--amber-light)">—</b></div>
+              <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span>Pontos de Rota:</span> <b id="rr-points">—</b></div>
+              <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span>Paradas Técnicas:</span> <b id="rr-stops" style="color:var(--green)">—</b></div>
+            </div>
           </div></div>
         </div>
 
@@ -1905,6 +1913,37 @@ function processKmlText(kmlText, fileName) {
     
     renderKmlList();
     updateIndicators();
+    
+    // Analisa a rota para o painel de relatórios
+    let routePolyline = null;
+    let stopCount = 0;
+    
+    layer.eachLayer(l => {
+      if (l instanceof L.Polyline && !(l instanceof L.Polygon)) {
+        routePolyline = l;
+      }
+      if (l instanceof L.Marker) {
+        stopCount++;
+      }
+    });
+    
+    const reportCard = document.getElementById('kml-route-report');
+    if (routePolyline && reportCard) {
+      const latlngs = routePolyline.getLatLngs();
+      const flatLatLngs = Array.isArray(latlngs[0]) ? latlngs.flat() : latlngs;
+      
+      const distMeters = lineLength(flatLatLngs.map(ll => L.latLng(ll)));
+      const name = fileName.replace(/\.[^/.]+$/, "");
+      
+      document.getElementById('rr-name').textContent = name;
+      document.getElementById('rr-dist').textContent = formatDist(distMeters);
+      document.getElementById('rr-points').textContent = flatLatLngs.length;
+      document.getElementById('rr-stops').textContent = stopCount;
+      reportCard.style.display = 'block';
+    } else if (reportCard) {
+      reportCard.style.display = 'none';
+    }
+
     toast(`KML "${fileName}" importado com sucesso`, 'success');
     setStatus('Camada KML carregada');
   } catch (err) {
@@ -2141,6 +2180,12 @@ function renderKmlList() {
       map.removeLayer(k.layer);
       STATE.kmlLayers = STATE.kmlLayers.filter(x => x.id !== k.id);
       renderKmlList(); updateIndicators();
+      
+      // Ocultar relatório de rota se todas as camadas forem removidas
+      if (STATE.kmlLayers.length === 0) {
+        const rc = document.getElementById('kml-route-report');
+        if (rc) rc.style.display = 'none';
+      }
     };
     box.appendChild(el);
   });
