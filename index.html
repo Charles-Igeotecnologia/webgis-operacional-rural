@@ -913,59 +913,145 @@ html, body {
 
 /* Regra de impressão */
 @media print {
-  body * {
-    visibility: hidden;
-  }
-  #route-report-modal, #route-report-modal * {
-    visibility: visible;
-  }
-  #route-report-modal {
-    position: absolute;
-    left: 0; top: 0;
-    width: 100%; height: auto;
+  body {
     background: #fff !important;
     color: #000 !important;
-    box-shadow: none !important;
-    border: none !important;
-  }
-  .modal-overlay {
-    background: #fff !important;
-    position: absolute;
-  }
-  .modal {
-    background: #fff !important;
-    color: #000 !important;
-    box-shadow: none !important;
-    border: none !important;
-    max-height: none !important;
+    height: auto !important;
     overflow: visible !important;
   }
+  #app, #toast-container, .modal-overlay:not(#route-report-modal), .modal-close {
+    display: none !important;
+  }
+  
+  #route-report-modal.modal-overlay {
+    position: relative !important;
+    display: block !important;
+    background: #fff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    z-index: auto !important;
+    opacity: 1 !important;
+  }
+  
+  .report-modal.modal {
+    position: relative !important;
+    display: block !important;
+    background: #fff !important;
+    color: #000 !important;
+    box-shadow: none !important;
+    border: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    transform: none !important;
+  }
+  
+  .modal-head {
+    border-bottom: 2px solid #333 !important;
+    padding: 10px 0 !important;
+    color: #000 !important;
+  }
+  
+  .modal-title {
+    color: #000 !important;
+    font-size: 18px !important;
+  }
+  
+  .modal-body {
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 15px 0 !important;
+  }
+  
+  .report-grid {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    margin-bottom: 20px !important;
+  }
+  
   .report-stat-card {
-    border: 1px solid #ddd !important;
-    background: none !important;
+    flex: 1 1 120px !important;
+    border: 1px solid #ccc !important;
+    background: #fcfcfc !important;
+    color: #000 !important;
+    padding: 8px !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    break-inside: avoid !important;
   }
+  
+  .report-stat-card .rsc-lbl {
+    color: #555 !important;
+  }
+  
   .report-stat-card .rsc-val {
-    color: #000 !important;
+    color: #ff8426 !important;
+    font-size: 15px !important;
   }
+  
   .report-charts-container {
-    border: 1px solid #ddd !important;
-    background: none !important;
-    height: 320px !important;
+    border: 1px solid #222 !important;
+    background: #141414 !important;
+    height: 280px !important;
+    margin-bottom: 25px !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    break-inside: avoid !important;
   }
+  
+  .report-chrono-table {
+    margin-top: 15px !important;
+    width: 100% !important;
+  }
+  
   .report-chrono-table th {
-    color: #333 !important;
+    color: #111 !important;
     border-bottom: 2px solid #000 !important;
+    background: #f0f0f0 !important;
+    padding: 6px 8px !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
+  
   .report-chrono-table td {
-    color: #000 !important;
+    color: #222 !important;
     border-bottom: 1px solid #ddd !important;
+    padding: 6px 8px !important;
   }
+  
+  .report-chrono-table tr {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+  
   .chrono-tag {
     background: none !important;
-    border: 1px solid #000 !important;
+    border: 1px solid #444 !important;
     color: #000 !important;
+    font-size: 8px !important;
   }
-  .modal-close, .modal-foot, .btn, select {
+  
+  .school-bind-select {
+    border: none !important;
+    background: transparent !important;
+    color: #000 !important;
+    padding: 0 !important;
+    font-weight: 700 !important;
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    appearance: none !important;
+  }
+  
+  .modal-foot, .btn, select option {
     display: none !important;
   }
 }
