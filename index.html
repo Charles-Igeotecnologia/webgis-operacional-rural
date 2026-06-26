@@ -13,6 +13,7 @@
 <script src="https://unpkg.com/leaflet-kml@2.0.2/L.KML.js"></script>
 <script src="https://unpkg.com/@mapbox/leaflet-omnivore@0.3.4/leaflet-omnivore.min.js"></script>
 <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
 :root {
@@ -807,6 +808,167 @@ html, body {
   }
   .attr-actions { justify-content: flex-end; gap: 8px; }
 }
+
+/* --- MODAL DO RELATÓRIO DE ROTA --- */
+.report-modal {
+  max-width: 900px;
+  width: 92%;
+  max-height: 90%;
+  border: 1px solid var(--border-amber);
+  box-shadow: var(--shadow-amber);
+  background: var(--bg-panel);
+}
+.report-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.report-stat-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  padding: 10px 12px;
+  text-align: center;
+}
+.report-stat-card .rsc-lbl {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+  letter-spacing: .5px;
+}
+.report-stat-card .rsc-val {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--amber-light);
+}
+.report-charts-container {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  padding: 15px;
+  margin-bottom: 20px;
+  position: relative;
+  height: 280px;
+}
+.report-chrono-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+.report-chrono-table th {
+  text-align: left;
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border-soft);
+  padding: 8px 10px;
+}
+.report-chrono-table td {
+  font-size: 12px;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.02);
+}
+.report-chrono-table tr:hover td {
+  background: rgba(255,255,255,0.01);
+}
+.chrono-tag {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.chrono-tag.visit {
+  background: rgba(53, 208, 127, 0.15);
+  color: var(--green);
+  border: 1px solid rgba(53, 208, 127, 0.3);
+}
+.chrono-tag.pass {
+  background: rgba(56, 189, 248, 0.15);
+  color: var(--blue);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+.chrono-tag.stop {
+  background: rgba(255, 132, 38, 0.15);
+  color: var(--amber);
+  border: 1px solid rgba(255, 132, 38, 0.3);
+}
+.school-bind-select {
+  background: #141414;
+  color: var(--text-main);
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  font-size: 11px;
+  padding: 4px 6px;
+  outline: none;
+  cursor: pointer;
+  max-width: 220px;
+}
+.school-bind-select:focus {
+  border-color: var(--amber);
+}
+
+/* Regra de impressão */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #route-report-modal, #route-report-modal * {
+    visibility: visible;
+  }
+  #route-report-modal {
+    position: absolute;
+    left: 0; top: 0;
+    width: 100%; height: auto;
+    background: #fff !important;
+    color: #000 !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  .modal-overlay {
+    background: #fff !important;
+    position: absolute;
+  }
+  .modal {
+    background: #fff !important;
+    color: #000 !important;
+    box-shadow: none !important;
+    border: none !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  .report-stat-card {
+    border: 1px solid #ddd !important;
+    background: none !important;
+  }
+  .report-stat-card .rsc-val {
+    color: #000 !important;
+  }
+  .report-charts-container {
+    border: 1px solid #ddd !important;
+    background: none !important;
+    height: 320px !important;
+  }
+  .report-chrono-table th {
+    color: #333 !important;
+    border-bottom: 2px solid #000 !important;
+  }
+  .report-chrono-table td {
+    color: #000 !important;
+    border-bottom: 1px solid #ddd !important;
+  }
+  .chrono-tag {
+    background: none !important;
+    border: 1px solid #000 !important;
+    color: #000 !important;
+  }
+  .modal-close, .modal-foot, .btn, select {
+    display: none !important;
+  }
+}
 </style>
 </head>
 <body>
@@ -840,6 +1002,8 @@ html, body {
   <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M14 6l4 4"/></symbol>
   <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
   <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+  <symbol id="i-print" viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></symbol>
 </svg>
 
 <div id="app">
@@ -964,6 +1128,7 @@ html, body {
               <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span>Distância Total:</span> <b id="rr-dist" style="color:var(--amber-light)">—</b></div>
               <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span>Pontos de Rota:</span> <b id="rr-points">—</b></div>
               <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span>Paradas Técnicas:</span> <b id="rr-stops" style="color:var(--green)">—</b></div>
+              <button class="btn sm" id="btn-show-route-report" style="width:100%; margin-top:8px; padding:6px; font-size:10px; display:flex; align-items:center; justify-content:center; gap:4px;"><svg class="icon sm" style="color:inherit; fill:none;"><use href="#i-info"/></svg> Detalhar Relatório Técnico</button>
             </div>
           </div></div>
         </div>
@@ -1067,6 +1232,76 @@ html, body {
       <span id="attr-count">0 feições</span>
       <span style="flex:1"></span>
       <span>Duplo-clique numa célula para editar · alterações são salvas automaticamente</span>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL RELATÓRIO DE ROTA ===== -->
+<div class="modal-overlay" id="route-report-modal">
+  <div class="modal report-modal">
+    <div class="modal-head">
+      <svg class="icon" style="color:var(--amber-light)"><use href="#i-route"/></svg>
+      <div class="modal-title" id="rm-title">Relatório Técnico da Rota</div>
+      <button class="modal-close" id="route-report-close"><svg class="icon sm"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="modal-body" style="padding: 20px; overflow-y: auto; max-height: calc(100vh - 150px);">
+      <!-- Indicadores de desempenho -->
+      <div class="report-grid">
+        <div class="report-stat-card">
+          <div class="rsc-lbl">Distância Total</div>
+          <div class="rsc-val" id="rm-dist">—</div>
+        </div>
+        <div class="report-stat-card">
+          <div class="rsc-lbl">Duração Total</div>
+          <div class="rsc-val" id="rm-duration">—</div>
+        </div>
+        <div class="report-stat-card">
+          <div class="rsc-lbl">Velocidade Média</div>
+          <div class="rsc-val" id="rm-avg-speed">—</div>
+        </div>
+        <div class="report-stat-card">
+          <div class="rsc-lbl">Velocidade Máxima</div>
+          <div class="rsc-val" id="rm-max-speed">—</div>
+        </div>
+        <div class="report-stat-card">
+          <div class="rsc-lbl">Altitude Mín/Máx</div>
+          <div class="rsc-val" id="rm-alt-range">—</div>
+        </div>
+        <div class="report-stat-card">
+          <div class="rsc-lbl">Ganho Altura</div>
+          <div class="rsc-val" id="rm-elevation-gain">—</div>
+        </div>
+      </div>
+
+      <!-- Gráfico de Perfil -->
+      <div style="font-weight:700; color:var(--amber-light); font-size:11px; text-transform:uppercase; margin-bottom:10px; letter-spacing:.5px; display:flex; align-items:center; gap:5px;"><svg class="icon sm" style="color:inherit"><use href="#i-line"/></svg> Perfil Técnico (Velocidade & Elevação)</div>
+      <div class="report-charts-container">
+        <canvas id="route-chart"></canvas>
+      </div>
+
+      <!-- Cronograma e Visitas -->
+      <div style="font-weight:700; color:var(--amber-light); font-size:11px; text-transform:uppercase; margin-top:20px; margin-bottom:10px; letter-spacing:.5px; display:flex; align-items:center; gap:5px;"><svg class="icon sm" style="color:inherit"><use href="#i-clock"/></svg> Cronograma de Paradas e Visitas Técnicas</div>
+      <div style="overflow-x:auto;">
+        <table class="report-chrono-table">
+          <thead>
+            <tr>
+              <th style="width: 80px;">Hora (Local)</th>
+              <th style="width: 90px;">Distância</th>
+              <th style="width: 100px;">Evento</th>
+              <th>Localização / Escola Vinculada</th>
+              <th>Informação de Visita / Observações de Campo</th>
+            </tr>
+          </thead>
+          <tbody id="rm-chrono-tbody">
+            <!-- Gerado dinamicamente -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" id="btn-print-report"><svg class="icon sm" style="color:inherit; fill:none;"><use href="#i-print"/></svg> Imprimir Relatório / Salvar PDF</button>
+      <span style="flex:1"></span>
+      <span style="font-size:10px; color:var(--text-muted);">Relatório dinâmico gerado localmente pelo WebGIS a partir de dados brutos de GPS</span>
     </div>
   </div>
 </div>
@@ -1929,16 +2164,13 @@ function processKmlText(kmlText, fileName) {
     
     const reportCard = document.getElementById('kml-route-report');
     if (routePolyline && reportCard) {
-      const latlngs = routePolyline.getLatLngs();
-      const flatLatLngs = Array.isArray(latlngs[0]) ? latlngs.flat() : latlngs;
+      processRouteTelemetry(routePolyline, fileName);
+      const rep = STATE.activeRouteReport;
       
-      const distMeters = lineLength(flatLatLngs.map(ll => L.latLng(ll)));
-      const name = fileName.replace(/\.[^/.]+$/, "");
-      
-      document.getElementById('rr-name').textContent = name;
-      document.getElementById('rr-dist').textContent = formatDist(distMeters);
-      document.getElementById('rr-points').textContent = flatLatLngs.length;
-      document.getElementById('rr-stops').textContent = stopCount;
+      document.getElementById('rr-name').textContent = rep.name;
+      document.getElementById('rr-dist').textContent = formatDist(rep.distance);
+      document.getElementById('rr-points').textContent = rep.pointsCount;
+      document.getElementById('rr-stops').textContent = rep.stops.length;
       reportCard.style.display = 'block';
     } else if (reportCard) {
       reportCard.style.display = 'none';
@@ -2096,6 +2328,13 @@ function parseKmlCustom(kmlDoc) {
             weight: style.weight || 3,
             opacity: 0.85
           }).bindPopup(popupContent);
+          
+          polyline.telemetryPoints = coords.map(c => ({
+            lat: c.lat,
+            lng: c.lng,
+            alt: c.alt || 0,
+            time: null
+          }));
           layerGroup.addLayer(polyline);
         }
       }
@@ -2125,23 +2364,31 @@ function parseKmlCustom(kmlDoc) {
     tracks.forEach(track => {
       const coordNodes = Array.from(track.getElementsByTagName('gx:coord'))
         .concat(Array.from(track.getElementsByTagName('coord')));
+      const whenNodes = Array.from(track.getElementsByTagName('when'));
       const coords = [];
-      coordNodes.forEach(cn => {
+      const trackPoints = [];
+      
+      for (let i = 0; i < coordNodes.length; i++) {
+        const cn = coordNodes[i];
         const parts = cn.textContent.trim().split(/\s+/);
         if (parts.length >= 2) {
           const lng = parseFloat(parts[0]);
           const lat = parseFloat(parts[1]);
+          const alt = parts.length >= 3 ? parseFloat(parts[2]) : 0;
+          const time = whenNodes[i] ? whenNodes[i].textContent.trim() : null;
           if (!isNaN(lat) && !isNaN(lng)) {
             coords.push([lat, lng]);
+            trackPoints.push({ lat, lng, alt, time });
           }
         }
-      });
+      }
       if (coords.length > 0) {
         const polyline = L.polyline(coords, {
           color: color,
           weight: style.weight || 4,
           opacity: 0.85
         }).bindPopup(popupContent);
+        polyline.telemetryPoints = trackPoints;
         layerGroup.addLayer(polyline);
       }
     });
@@ -2159,8 +2406,9 @@ function parseCoordinates(str) {
     if (parts.length >= 2) {
       const lng = parseFloat(parts[0]);
       const lat = parseFloat(parts[1]);
+      const alt = parts.length >= 3 ? parseFloat(parts[2]) : 0;
       if (!isNaN(lat) && !isNaN(lng)) {
-        points.push({ lat, lng });
+        points.push({ lat, lng, alt });
       }
     }
   });
@@ -2729,6 +2977,604 @@ document.addEventListener('click', e => {
     mapSearchResults.style.display = 'none';
   }
 });
+
+/* ============================================================
+   AUTOMAÇÃO DE RELATÓRIO TÉCNICO DE ROTAS (TELEMETRIA E VISITAS)
+   ============================================================ */
+
+// Inicializa a variável para a instância do gráfico do Chart.js
+STATE.routeChartInstance = null;
+
+// Função de Haversine para cálculo preciso de distâncias geodésicas em metros
+function haversineDistance(pt1, pt2) {
+  const R = 6371000;
+  const dLat = (pt2.lat - pt1.lat) * Math.PI / 180;
+  const dLng = (pt2.lng - pt1.lng) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(pt1.lat * Math.PI / 180) * Math.cos(pt2.lat * Math.PI / 180) *
+            Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+// Menor distância espacial de um ponto até a rota
+function getMinDistanceToRoute(school, points) {
+  let minD = Infinity;
+  let minIdx = -1;
+  for (let i = 0; i < points.length; i++) {
+    const d = haversineDistance(school, points[i]);
+    if (d < minD) {
+      minD = d;
+      minIdx = i;
+    }
+  }
+  return { dist: minD, pointIndex: minIdx };
+}
+
+// Formatação amigável de durações de viagem
+function formatDuration(s) {
+  if (!s || isNaN(s)) return '—';
+  if (s < 60) return `${Math.round(s)} seg`;
+  const m = Math.floor(s / 60);
+  const sec = Math.round(s % 60);
+  if (m < 60) return `${m} min e ${sec} seg`;
+  const h = Math.floor(m / 60);
+  const min = Math.round(m % 60);
+  return `${h}h ${min}m`;
+}
+
+// Processa a telemetria completa da rota KML importada
+function processRouteTelemetry(routePolyline, fileName) {
+  const points = routePolyline.telemetryPoints || [];
+  const name = fileName.replace(/\.[^/.]+$/, "");
+  
+  if (points.length === 0) {
+    const latlngs = routePolyline.getLatLngs();
+    const flatLatLngs = Array.isArray(latlngs[0]) ? latlngs.flat() : latlngs;
+    flatLatLngs.forEach(ll => {
+      points.push({ lat: ll.lat, lng: ll.lng, alt: 0, time: null });
+    });
+  }
+  
+  let accumDist = 0;
+  const processedPoints = [];
+  let maxSpeed = 0;
+  let totalSpeed = 0;
+  let speedCount = 0;
+  let minAlt = Infinity;
+  let maxAlt = -Infinity;
+  let elevationGain = 0;
+  
+  for (let i = 0; i < points.length; i++) {
+    const pt = points[i];
+    const alt = pt.alt || 0;
+    if (alt < minAlt) minAlt = alt;
+    if (alt > maxAlt) maxAlt = alt;
+    
+    if (i > 0) {
+      const prevPt = points[i - 1];
+      const dAlt = alt - (prevPt.alt || 0);
+      if (dAlt > 0) elevationGain += dAlt;
+      
+      const d = haversineDistance(prevPt, pt);
+      accumDist += d;
+    }
+    
+    let speed = 0;
+    let timeDiff = 0;
+    if (i > 0 && pt.time && points[i - 1].time) {
+      const t1 = new Date(points[i - 1].time).getTime();
+      const t2 = new Date(pt.time).getTime();
+      timeDiff = (t2 - t1) / 1000;
+      if (timeDiff > 0) {
+        const dist = haversineDistance(points[i - 1], pt);
+        speed = (dist / timeDiff) * 3.6;
+        if (speed > 85) speed = processedPoints[i - 1] ? processedPoints[i - 1].speed : 0;
+      }
+    }
+    
+    processedPoints.push({
+      lat: pt.lat,
+      lng: pt.lng,
+      alt: alt,
+      time: pt.time,
+      accumDist: accumDist / 1000,
+      speed: speed
+    });
+  }
+  
+  if (processedPoints.length > 5 && processedPoints[0].time) {
+    for (let i = 2; i < processedPoints.length - 2; i++) {
+      let sum = 0;
+      for (let j = -2; j <= 2; j++) sum += processedPoints[i + j].speed;
+      processedPoints[i].speed = sum / 5;
+    }
+  }
+  
+  processedPoints.forEach((p, idx) => {
+    if (idx > 0 && p.time) {
+      if (p.speed > maxSpeed) maxSpeed = p.speed;
+      totalSpeed += p.speed;
+      speedCount++;
+    }
+  });
+  
+  const avgSpeed = speedCount > 0 ? (totalSpeed / speedCount) : 0;
+  
+  let durationSeconds = 0;
+  let startTimeStr = "—";
+  let endTimeStr = "—";
+  if (processedPoints.length > 0 && processedPoints[0].time && processedPoints[processedPoints.length - 1].time) {
+    const tStart = new Date(processedPoints[0].time);
+    const tEnd = new Date(processedPoints[processedPoints.length - 1].time);
+    durationSeconds = (tEnd.getTime() - tStart.getTime()) / 1000;
+    startTimeStr = tStart.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    endTimeStr = tEnd.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+  
+  const detectedStops = [];
+  let stopStartIdx = -1;
+  for (let i = 0; i < processedPoints.length; i++) {
+    const p = processedPoints[i];
+    if (p.time) {
+      if (p.speed < 2.0) {
+        if (stopStartIdx === -1) stopStartIdx = i;
+      } else {
+        if (stopStartIdx !== -1) {
+          const tStart = new Date(processedPoints[stopStartIdx].time).getTime();
+          const tEnd = new Date(processedPoints[i].time).getTime();
+          const stopDur = (tEnd - tStart) / 1000;
+          if (stopDur >= 60) {
+            detectedStops.push({
+              lat: processedPoints[stopStartIdx].lat,
+              lng: processedPoints[stopStartIdx].lng,
+              startIndex: stopStartIdx,
+              endIndex: i,
+              time: processedPoints[stopStartIdx].time,
+              duration: stopDur
+            });
+          }
+          stopStartIdx = -1;
+        }
+      }
+    }
+  }
+  if (stopStartIdx !== -1 && processedPoints.length > 0) {
+    const i = processedPoints.length - 1;
+    const tStart = new Date(processedPoints[stopStartIdx].time).getTime();
+    const tEnd = new Date(processedPoints[i].time).getTime();
+    const stopDur = (tEnd - tStart) / 1000;
+    if (stopDur >= 60) {
+      detectedStops.push({
+        lat: processedPoints[stopStartIdx].lat,
+        lng: processedPoints[stopStartIdx].lng,
+        startIndex: stopStartIdx,
+        endIndex: i,
+        time: processedPoints[stopStartIdx].time,
+        duration: stopDur
+      });
+    }
+  }
+  
+  const schoolsVisited = [];
+  const manualBindings = JSON.parse(localStorage.getItem(`route_manual_bind_${name}`) || "{}");
+  
+  ESCOLAS.forEach(esc => {
+    const { dist, pointIndex } = getMinDistanceToRoute(esc, processedPoints);
+    if (dist < 600) {
+      let type = 'pass';
+      let visitDuration = 0;
+      
+      const associatedStop = detectedStops.find(s => haversineDistance(s, esc) < 150);
+      if (associatedStop) {
+        type = 'visit';
+        visitDuration = associatedStop.duration;
+      } else {
+        const start = Math.max(0, pointIndex - 5);
+        const end = Math.min(processedPoints.length - 1, pointIndex + 5);
+        let speedSum = 0;
+        let count = 0;
+        for (let j = start; j <= end; j++) {
+          speedSum += processedPoints[j].speed;
+          count++;
+        }
+        const localAvgSpeed = speedSum / count;
+        if (localAvgSpeed < 3.5 && processedPoints[0].time) {
+          type = 'visit';
+          let firstIn = -1, lastOut = -1;
+          for (let j = 0; j < processedPoints.length; j++) {
+            if (haversineDistance(processedPoints[j], esc) < 150) {
+              if (firstIn === -1) firstIn = j;
+              lastOut = j;
+            }
+          }
+          if (firstIn !== -1 && lastOut !== -1 && processedPoints[firstIn].time && processedPoints[lastOut].time) {
+            visitDuration = (new Date(processedPoints[lastOut].time).getTime() - new Date(processedPoints[firstIn].time).getTime()) / 1000;
+          }
+        }
+      }
+      
+      schoolsVisited.push({
+        schoolId: esc.id,
+        schoolName: esc.nome,
+        dist: dist,
+        pointIndex: pointIndex,
+        time: processedPoints[pointIndex].time,
+        visitDuration: visitDuration,
+        type: type
+      });
+    }
+  });
+  
+  STATE.activeRouteReport = {
+    name: name,
+    fileName: fileName,
+    distance: accumDist,
+    pointsCount: processedPoints.length,
+    duration: durationSeconds,
+    startTime: startTimeStr,
+    endTime: endTimeStr,
+    avgSpeed: avgSpeed,
+    maxSpeed: maxSpeed,
+    minAlt: minAlt === Infinity ? 0 : minAlt,
+    maxAlt: maxAlt === -Infinity ? 0 : maxAlt,
+    elevationGain: elevationGain,
+    telemetryPoints: processedPoints,
+    stops: detectedStops,
+    schoolsVisited: schoolsVisited,
+    manualBindings: manualBindings
+  };
+}
+
+// Renderiza a interface do modal de relatório detalhado
+function renderRouteReport() {
+  const rep = STATE.activeRouteReport;
+  if (!rep) return;
+  
+  document.getElementById('rm-title').textContent = `Relatório Técnico da Rota: ${rep.name}`;
+  document.getElementById('rm-dist').textContent = formatDist(rep.distance);
+  document.getElementById('rm-duration').textContent = formatDuration(rep.duration);
+  document.getElementById('rm-avg-speed').textContent = rep.avgSpeed > 0 ? `${rep.avgSpeed.toFixed(1)} km/h` : 'N/A';
+  document.getElementById('rm-max-speed').textContent = rep.maxSpeed > 0 ? `${rep.maxSpeed.toFixed(1)} km/h` : 'N/A';
+  document.getElementById('rm-alt-range').textContent = `${rep.minAlt.toFixed(1)}m a ${rep.maxAlt.toFixed(1)}m`;
+  document.getElementById('rm-elevation-gain').textContent = `${rep.elevationGain.toFixed(1)} m`;
+  
+  const tbody = document.getElementById('rm-chrono-tbody');
+  tbody.innerHTML = '';
+  
+  const telemetry = rep.telemetryPoints;
+  const events = [];
+  
+  // Partida
+  if (telemetry[0] && telemetry[0].time) {
+    events.push({
+      time: telemetry[0].time,
+      accumDist: 0,
+      type: 'start',
+      title: 'Partida da Rota',
+      desc: `Saída do ponto inicial registrada. Horário de início: ${rep.startTime}.`
+    });
+  }
+  
+  // Escolas (cruzadas automaticamente ou vinculadas manualmente)
+  const boundSchoolIds = new Set();
+  const indexBindings = {};
+  
+  // Preenche primeiro os mapeamentos manuais
+  Object.entries(rep.manualBindings).forEach(([pointIndex, schoolId]) => {
+    indexBindings[parseInt(pointIndex)] = parseInt(schoolId);
+  });
+  
+  rep.schoolsVisited.forEach(ev => {
+    const manualBind = indexBindings[ev.pointIndex];
+    const finalId = manualBind !== undefined ? manualBind : ev.schoolId;
+    
+    if (finalId !== 0) {
+      const esc = ESCOLAS.find(x => x.id === finalId);
+      if (esc) {
+        boundSchoolIds.add(finalId);
+        let descInfo = "";
+        if (ev.type === 'visit') {
+          const minStr = ev.visitDuration > 60 ? `${Math.round(ev.visitDuration/60)} min` : `${Math.round(ev.visitDuration)} seg`;
+          descInfo = `<b>Visita técnica confirmada</b>. Tempo atracado/parado: ${minStr}. Escola atende a ${esc.alunos} alunos.`;
+        } else {
+          descInfo = `Passagem rápida de aproximação (distância aproximada: ${ev.dist.toFixed(0)}m).`;
+        }
+        
+        events.push({
+          time: ev.time,
+          accumDist: telemetry[ev.pointIndex].accumDist,
+          type: ev.type,
+          title: esc.nome,
+          schoolId: esc.id,
+          pointIndex: ev.pointIndex,
+          desc: descInfo
+        });
+      }
+    }
+    indexBindings[ev.pointIndex] = finalId;
+  });
+  
+  // Paradas que não foram associadas a escolas
+  rep.stops.forEach(st => {
+    const hasSchoolClose = rep.schoolsVisited.some(sv => sv.type === 'visit' && Math.abs(sv.pointIndex - st.startIndex) < 10);
+    const manualBind = indexBindings[st.startIndex];
+    
+    if (!hasSchoolClose && (!manualBind || manualBind === 0)) {
+      const minStr = st.duration > 60 ? `${Math.round(st.duration/60)} min` : `${Math.round(st.duration)} seg`;
+      events.push({
+        time: st.time,
+        accumDist: telemetry[st.startIndex].accumDist,
+        type: 'stop',
+        title: 'Parada Técnica',
+        pointIndex: st.startIndex,
+        desc: `Parada de telemetria identificada. Duração: ${minStr}. Coordenadas: ${st.lat.toFixed(5)}, ${st.lng.toFixed(5)}.`
+      });
+    }
+  });
+  
+  // Tratamento de vinculações manuais exclusivas
+  Object.entries(indexBindings).forEach(([pointIndex, schoolId]) => {
+    const pIdx = parseInt(pointIndex);
+    const sId = parseInt(schoolId);
+    if (sId !== 0 && !boundSchoolIds.has(sId)) {
+      const esc = ESCOLAS.find(x => x.id === sId);
+      if (esc && telemetry[pIdx]) {
+        boundSchoolIds.add(sId);
+        events.push({
+          time: telemetry[pIdx].time,
+          accumDist: telemetry[pIdx].accumDist,
+          type: 'visit',
+          title: esc.nome,
+          schoolId: esc.id,
+          pointIndex: pIdx,
+          desc: `<b>Vinculação Manual</b>. Escola selecionada pelo operador. Alunos matriculados: ${esc.alunos}.`
+        });
+      }
+    }
+  });
+  
+  // Chegada
+  if (telemetry.length > 1 && telemetry[telemetry.length - 1].time) {
+    const last = telemetry[telemetry.length - 1];
+    events.push({
+      time: last.time,
+      accumDist: last.accumDist,
+      type: 'end',
+      title: 'Fim da Viagem',
+      desc: `Chegada ao destino final e encerramento do monitoramento às ${rep.endTime}.`
+    });
+  }
+  
+  // Ordenação cronológica
+  events.sort((a, b) => {
+    if (!a.time) return 1;
+    if (!b.time) return -1;
+    return new Date(a.time) - new Date(b.time);
+  });
+  
+  // Gerar o HTML das linhas da tabela
+  if (events.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted)">Nenhum evento temporal encontrado na rota (KML sem timestamps).</td></tr>`;
+  } else {
+    events.forEach(ev => {
+      const timeStr = ev.time ? new Date(ev.time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '—';
+      const distStr = formatDist(ev.accumDist * 1000);
+      
+      let typeTag = '';
+      if (ev.type === 'start') typeTag = '<span class="chrono-tag pass">Início</span>';
+      else if (ev.type === 'end') typeTag = '<span class="chrono-tag pass">Fim</span>';
+      else if (ev.type === 'visit') typeTag = '<span class="chrono-tag visit">Visita</span>';
+      else if (ev.type === 'pass') typeTag = '<span class="chrono-tag pass">Passagem</span>';
+      else if (ev.type === 'stop') typeTag = '<span class="chrono-tag stop">Parada</span>';
+      
+      let locationCell = '';
+      if (ev.schoolId !== undefined) {
+        let options = `<option value="0">(Desvincular Escola)</option>`;
+        
+        ESCOLAS.forEach(e => {
+          const selected = e.id === ev.schoolId ? ' selected' : '';
+          options += `<option value="${e.id}"${selected}>${e.nome}</option>`;
+        });
+        
+        locationCell = `<select class="school-bind-select" data-point-idx="${ev.pointIndex}">
+          ${options}
+        </select>`;
+      } else if (ev.type === 'stop') {
+        let options = `<option value="0" selected>-- Vincular Escola Rápida --</option>`;
+        ESCOLAS.forEach(e => {
+          options += `<option value="${e.id}">${e.nome}</option>`;
+        });
+        locationCell = `<div style="display:flex; flex-direction:column; gap:4px;">
+          <span>${ev.title}</span>
+          <select class="school-bind-select" data-point-idx="${ev.pointIndex}" style="border-color:var(--border-amber)">
+            ${options}
+          </select>
+        </div>`;
+      } else {
+        locationCell = `<b>${ev.title}</b>`;
+      }
+      
+      tbody.innerHTML += `
+        <tr>
+          <td style="font-family:monospace">${timeStr}</td>
+          <td style="font-family:monospace">${distStr}</td>
+          <td>${typeTag}</td>
+          <td>${locationCell}</td>
+          <td style="color:var(--text-soft)">${ev.desc}</td>
+        </tr>`;
+    });
+    
+    // Vincular evento de alteração nos dropdowns de escola
+    tbody.querySelectorAll('.school-bind-select').forEach(select => {
+      select.onchange = e => {
+        const pointIdx = parseInt(select.dataset.pointIdx);
+        const schoolId = parseInt(select.value);
+        
+        rep.manualBindings[pointIdx] = schoolId;
+        localStorage.setItem(`route_manual_bind_${rep.name}`, JSON.stringify(rep.manualBindings));
+        
+        toast('Vinculação da escola atualizada', 'success');
+        
+        const routePolyline = STATE.kmlLayers.find(k => k.name.replace(/\.[^/.]+$/, "") === rep.name).layer.getLayers().find(l => l instanceof L.Polyline && !(l instanceof L.Polygon));
+        if (routePolyline) {
+          processRouteTelemetry(routePolyline, rep.fileName);
+          renderRouteReport();
+        }
+      };
+    });
+  }
+  
+  // Plota o gráfico usando Chart.js
+  initRouteChart(telemetry);
+}
+
+// Inicializa a plotagem do gráfico com Chart.js
+function initRouteChart(points) {
+  const ctx = document.getElementById('route-chart').getContext('2d');
+  if (STATE.routeChartInstance) {
+    STATE.routeChartInstance.destroy();
+  }
+  
+  const step = Math.max(1, Math.floor(points.length / 150));
+  const chartPoints = [];
+  for (let i = 0; i < points.length; i += step) {
+    chartPoints.push(points[i]);
+  }
+  if (points.length > 0 && chartPoints[chartPoints.length - 1] !== points[points.length - 1]) {
+    chartPoints.push(points[points.length - 1]);
+  }
+  
+  const labels = chartPoints.map(p => p.accumDist.toFixed(2));
+  const altData = chartPoints.map(p => p.alt.toFixed(1));
+  const speedData = chartPoints.map(p => p.speed.toFixed(1));
+  const hasTime = points[0] && points[0].time !== null;
+  
+  const datasets = [
+    {
+      label: 'Altitude (m)',
+      data: altData,
+      borderColor: '#38bdf8',
+      backgroundColor: 'rgba(56, 189, 248, 0.05)',
+      yAxisID: 'yAlt',
+      borderWidth: 2.5,
+      fill: true,
+      pointRadius: 0,
+      tension: 0.3
+    }
+  ];
+  
+  if (hasTime) {
+    datasets.push({
+      label: 'Velocidade (km/h)',
+      data: speedData,
+      borderColor: '#ff8426',
+      backgroundColor: 'transparent',
+      yAxisID: 'ySpeed',
+      borderWidth: 2,
+      pointRadius: 0,
+      tension: 0.3
+    });
+  }
+  
+  STATE.routeChartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: datasets
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {
+        mode: 'index',
+        intersect: false,
+      },
+      plugins: {
+        legend: {
+          labels: {
+            color: '#f5f5f5',
+            font: { size: 10, family: 'Segoe UI' }
+          }
+        },
+        tooltip: {
+          backgroundColor: 'rgba(16, 16, 16, 0.95)',
+          titleColor: '#ffb36b',
+          bodyColor: '#f5f5f5',
+          borderColor: 'var(--border-amber)',
+          borderWidth: 1,
+          callbacks: {
+            title: function(context) {
+              return `Distância: ${context[0].label} km`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          title: {
+            display: true,
+            text: 'Distância Percorrida (km)',
+            color: '#a8a29e',
+            font: { size: 10 }
+          },
+          grid: { color: 'rgba(255, 255, 255, 0.03)' },
+          ticks: { color: '#a8a29e', font: { size: 9 } }
+        },
+        yAlt: {
+          type: 'linear',
+          display: true,
+          position: 'left',
+          title: {
+            display: true,
+            text: 'Altitude (m)',
+            color: '#38bdf8',
+            font: { size: 10 }
+          },
+          grid: { color: 'rgba(255, 255, 255, 0.05)' },
+          ticks: { color: '#a8a29e', font: { size: 9 } }
+        },
+        ySpeed: {
+          type: 'linear',
+          display: hasTime,
+          position: 'right',
+          title: {
+            display: true,
+            text: 'Velocidade (km/h)',
+            color: '#ff8426',
+            font: { size: 10 }
+          },
+          grid: { drawOnChartArea: false },
+          ticks: { color: '#a8a29e', font: { size: 9 } }
+        }
+      }
+    }
+  });
+}
+
+// Configura eventos de abertura e fechamento do modal de relatório técnico
+const routeReportModal = document.getElementById('route-report-modal');
+
+document.getElementById('btn-show-route-report').onclick = () => {
+  renderRouteReport();
+  routeReportModal.classList.add('show');
+};
+
+document.getElementById('route-report-close').onclick = () => {
+  routeReportModal.classList.remove('show');
+};
+
+routeReportModal.addEventListener('click', e => {
+  if (e.target === routeReportModal) {
+    routeReportModal.classList.remove('show');
+  }
+});
+
+// Ação de Impressão do Relatório
+document.getElementById('btn-print-report').onclick = () => {
+  window.print();
+};
+
 </script>
 </body>
 </html>
