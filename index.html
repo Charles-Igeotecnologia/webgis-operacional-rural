@@ -896,6 +896,11 @@ html, body {
   color: var(--amber);
   border: 1px solid rgba(255, 132, 38, 0.3);
 }
+.chrono-tag.port {
+  background: rgba(139, 92, 246, 0.15);
+  color: #a78bfa;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+}
 .school-bind-select {
   background: #141414;
   color: var(--text-main);
@@ -2237,20 +2242,20 @@ function processKmlText(kmlText, fileName) {
     
     // Analisa a rota para o painel de relatórios
     let routePolyline = null;
-    let stopCount = 0;
+    const kmlMarkers = [];
     
     layer.eachLayer(l => {
       if (l instanceof L.Polyline && !(l instanceof L.Polygon)) {
         routePolyline = l;
       }
       if (l instanceof L.Marker) {
-        stopCount++;
+        kmlMarkers.push(l);
       }
     });
     
     const reportCard = document.getElementById('kml-route-report');
     if (routePolyline && reportCard) {
-      processRouteTelemetry(routePolyline, fileName);
+      processRouteTelemetry(routePolyline, kmlMarkers, fileName);
       const rep = STATE.activeRouteReport;
       
       document.getElementById('rr-name').textContent = rep.name;
@@ -2397,6 +2402,11 @@ function parseKmlCustom(kmlDoc) {
               iconAnchor: [6, 6]
             })
           }).bindPopup(popupContent);
+          
+          marker.kmlName = name;
+          marker.kmlDesc = descNode ? descNode.textContent.trim() : '';
+          marker.kmlCoords = coords;
+          
           layerGroup.addLayer(marker);
         }
       }
@@ -3110,7 +3120,7 @@ function formatDuration(s) {
 }
 
 // Processa a telemetria completa da rota KML importada
-function processRouteTelemetry(routePolyline, fileName) {
+function processRouteTelemetry(routePolyline, kmlMarkers, fileName) {
   const points = routePolyline.telemetryPoints || [];
   const name = fileName.replace(/\.[^/.]+$/, "");
   
@@ -3243,6 +3253,7 @@ function processRouteTelemetry(routePolyline, fileName) {
   }
   
   const schoolsVisited = [];
+  const kmlPoints = [];
   const manualBindings = JSON.parse(localStorage.getItem(`route_manual_bind_${name}`) || "{}");
   
   ESCOLAS.forEach(esc => {
@@ -3292,6 +3303,27 @@ function processRouteTelemetry(routePolyline, fileName) {
     }
   });
   
+  // Mapeamento e Cruzamento de Portos e Marcadores do KML
+  (kmlMarkers || []).forEach(m => {
+    const latlng = m.getLatLng();
+    const { dist, pointIndex } = getMinDistanceToRoute({ lat: latlng.lat, lng: latlng.lng }, processedPoints);
+    
+    // Filtro para não duplicar escolas na lista de portos
+    const isSchool = schoolsVisited.some(s => s.dist < 150 && haversineDistance(s, { lat: latlng.lat, lng: latlng.lng }) < 150);
+    
+    if (!isSchool && dist < 1000) {
+      kmlPoints.push({
+        name: m.kmlName || 'Marcador de Campo',
+        desc: m.kmlDesc || 'Ponto georreferenciado registrado pelo Geo Tracker.',
+        lat: latlng.lat,
+        lng: latlng.lng,
+        dist: dist,
+        pointIndex: pointIndex,
+        time: processedPoints[pointIndex] ? processedPoints[pointIndex].time : null
+      });
+    }
+  });
+  
   STATE.activeRouteReport = {
     name: name,
     fileName: fileName,
@@ -3308,6 +3340,7 @@ function processRouteTelemetry(routePolyline, fileName) {
     telemetryPoints: processedPoints,
     stops: detectedStops,
     schoolsVisited: schoolsVisited,
+    kmlPoints: kmlPoints,
     manualBindings: manualBindings
   };
 }
@@ -3381,12 +3414,13 @@ function renderRouteReport() {
     indexBindings[ev.pointIndex] = finalId;
   });
   
-  // Paradas que não foram associadas a escolas
+  // Paradas que não foram associadas a escolas nem a portos
   rep.stops.forEach(st => {
     const hasSchoolClose = rep.schoolsVisited.some(sv => sv.type === 'visit' && Math.abs(sv.pointIndex - st.startIndex) < 10);
+    const hasPortClose = rep.kmlPoints && rep.kmlPoints.some(kp => Math.abs(kp.pointIndex - st.startIndex) < 10);
     const manualBind = indexBindings[st.startIndex];
     
-    if (!hasSchoolClose && (!manualBind || manualBind === 0)) {
+    if (!hasSchoolClose && !hasPortClose && (!manualBind || manualBind === 0)) {
       const minStr = st.duration > 60 ? `${Math.round(st.duration/60)} min` : `${Math.round(st.duration)} seg`;
       events.push({
         time: st.time,
@@ -3398,6 +3432,26 @@ function renderRouteReport() {
       });
     }
   });
+  
+  // Portos ou Pontos de Embarque/Desembarque do Geo Tracker
+  if (rep.kmlPoints) {
+    rep.kmlPoints.forEach(kp => {
+      let descInfo = kp.desc || 'Ponto georreferenciado registrado pelo Geo Tracker.';
+      const associatedStop = rep.stops.find(s => Math.abs(s.startIndex - kp.pointIndex) < 10);
+      if (associatedStop) {
+        const minStr = associatedStop.duration > 60 ? `${Math.round(associatedStop.duration/60)} min` : `${Math.round(associatedStop.duration)} seg`;
+        descInfo = `<b>Porto ativo</b>. Tempo de parada para embarque/desembarque: ${minStr}. ${kp.desc || ''}`;
+      }
+      events.push({
+        time: kp.time,
+        accumDist: telemetry[kp.pointIndex] ? telemetry[kp.pointIndex].accumDist : 0,
+        type: 'port',
+        title: kp.name,
+        pointIndex: kp.pointIndex,
+        desc: descInfo
+      });
+    });
+  }
   
   // Tratamento de vinculações manuais exclusivas
   Object.entries(indexBindings).forEach(([pointIndex, schoolId]) => {
@@ -3453,6 +3507,7 @@ function renderRouteReport() {
       else if (ev.type === 'visit') typeTag = '<span class="chrono-tag visit">Visita</span>';
       else if (ev.type === 'pass') typeTag = '<span class="chrono-tag pass">Passagem</span>';
       else if (ev.type === 'stop') typeTag = '<span class="chrono-tag stop">Parada</span>';
+      else if (ev.type === 'port') typeTag = '<span class="chrono-tag port">Porto</span>';
       
       let locationCell = '';
       if (ev.schoolId !== undefined) {
@@ -3502,10 +3557,14 @@ function renderRouteReport() {
         
         toast('Vinculação da escola atualizada', 'success');
         
-        const routePolyline = STATE.kmlLayers.find(k => k.name.replace(/\.[^/.]+$/, "") === rep.name).layer.getLayers().find(l => l instanceof L.Polyline && !(l instanceof L.Polygon));
-        if (routePolyline) {
-          processRouteTelemetry(routePolyline, rep.fileName);
-          renderRouteReport();
+        const kLayer = STATE.kmlLayers.find(k => k.name.replace(/\.[^/.]+$/, "") === rep.name);
+        if (kLayer) {
+          const routePolyline = kLayer.layer.getLayers().find(l => l instanceof L.Polyline && !(l instanceof L.Polygon));
+          const kmlMarkers = kLayer.layer.getLayers().filter(l => l instanceof L.Marker);
+          if (routePolyline) {
+            processRouteTelemetry(routePolyline, kmlMarkers, rep.fileName);
+            renderRouteReport();
+          }
         }
       };
     });

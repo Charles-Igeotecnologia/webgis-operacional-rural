@@ -32,16 +32,25 @@ Com base no cruzamento das tags `<gx:Track>` (geometria da linha) e `<Placemark>
 
 ## ⏱️ Cronologia de Visita e Pontos de Controle
 
-A tabela a seguir detalha a sequência cronológica dos eventos registrados pelos marcos georreferenciados:
+A tabela a seguir detalha a sequência cronológica dos eventos registrados na rota, demonstrando como os marcadores de campo coletados no Geo Tracker (como portos e paradas de alunos) são interpretados espacial e temporalmente:
 
-| Vértice | Horário | Distância do Início | Altitude | Descrição / Observação de Campo |
+| Evento | Horário | Distância do Início | Altitude | Descrição / Observação Técnica |
 | :--- | :--- | :--- | :--- | :--- |
-| **P inicial** | 10:19:12 | 0,00 km | 8,87 m | Ponto de partida da equipe técnica. Velocidade inicial: 0 km/h. |
-| **P01 a P09** | 10:20 a 10:59 | 0,08 a 13,79 km | 7,5 a 12,0 m | Pontos de rastreamento contínuo em trânsito. Velocidades variando entre 2 km/h e 6,5 km/h. |
-| **P Escola** | 11:02:44 | 14,36 km | 9,56 m | **Ponto de Interesse principal da visita**. Acesso direto à margem escolar. Velocidade de aproximação: 6,59 km/h. |
-| **Parada de ~2 min** | 11:04:45 | 14,37 km | 10,50 m | Registro de parada técnica operacional. Indica o tempo em que a embarcação permaneceu atracada para entrega ou fiscalização. |
-| **P10 a P11** | 11:05 a 11:12 | 14,39 a 16,93 km | 6,8 a 11,5 m | Trajeto de retorno da equipe ao ponto base. |
-| **P final** | 11:19:07 | 19,14 km | 11,99 m | Encerramento do monitoramento técnico. |
+| **Início da Viagem** | 10:19:12 | 0,00 km | 8,87 m | Ponto de partida registrado da embarcação fluvial (`P inicial`). |
+| **P01 a P09** | 10:20 a 10:59 | 0,08 a 13,79 km | 7,5 a 12,0 m | Pontos de rastreamento contínuo em trânsito com velocidades de cruzeiro de até 35 km/h. |
+| **Porto: P Escola** | 11:02:44 | 14,36 km | 9,56 m | **Porto Ativo**. Ponto georreferenciado de desembarque coletado em campo. Cruzamento de telemetria registrou tempo de parada de **~2 min** para embarque/desembarque de alunos e atracação da embarcação. |
+| **Visita: E.M. Santa Luzia** | 11:02:44 | 14,36 km | 9,56 m | **Associação Espacial Automática (< 150m)**. Ponto de visita técnica resolvido para a escola da base de dados. A instituição atende a 120 alunos locais. |
+| **P10 a P11** | 11:05 a 11:12 | 14,39 a 16,93 km | 6,8 a 11,5 m | Trajeto fluvial de retorno técnico. |
+| **Fim da Viagem** | 11:19:07 | 19,14 km | 11,99 m | Encerramento do track log no porto de destino final (`P final`). |
+
+---
+
+## ⚓ Integração de Portos de Embarque e Desembarque (Geo Tracker)
+
+No novo fluxo de telemetria automatizada do WebGIS, cada ponto georreferenciado marcado em campo como porto de embarque/desembarque ou parada de aluno (tags `<Placemark>` do tipo ponto contidas no KML/KMZ) é cruzado dinamicamente com os dados do track log de navegação:
+1. **Atribuição Temporal**: Como pontos isolados de KML geralmente não contêm timestamps de passagem, o sistema calcula a menor distância espacial entre a coordenada do porto e a rota percorrida, identificando o vértice da rota mais próximo e estimando o horário exato de chegada.
+2. **Tempo de Atracação/Parada**: Se a telemetria acusar velocidade próxima de zero (< 2.0 km/h) nas proximidades do porto por mais de 1 minuto, o sistema extrai a duração exata desta parada e anexa a informação de tempo de atracação diretamente na descrição do porto no relatório.
+3. **Resolução contra Duplicidade**: Para manter a clareza do relatório impresso, paradas técnicas genéricas detectadas por sensores de velocidade são omitidas quando ocorrem próximas a portos devidamente nomeados em campo, evitando linhas duplicadas e redundantes na tabela de eventos.
 
 ---
 
